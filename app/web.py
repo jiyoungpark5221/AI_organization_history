@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import adapters, auth, daily, lineage, review
+from . import adapters, auth, daily, lineage, review, timeline
 from .db import DEFAULT_SETTINGS, connect, get_setting, init_db, set_setting
 from .export import export_csv
 
@@ -321,6 +321,25 @@ async def case_lineage(request: Request, case_id: int, org: str = "", q: str = "
     results = lineage.search_orgs(conn, q) if q.strip() else None
     return templates.TemplateResponse(request, "_lineage.html", {
         "case": case, "g": g, "q": q, "results": results, "selected_org": selected,
+    })
+
+
+@app.get("/cases/{case_id}/timeline", response_class=HTMLResponse)
+async def case_timeline(request: Request, case_id: int, org: str = "", q: str = "", fn: str = "",
+                        conn=Depends(get_conn), user=Depends(require_user)):
+    """기능 담당 조직 계보도 — 타임라인 탭 조각(읽기 전용)."""
+    case = conn.execute("SELECT * FROM review_case WHERE case_id=?", (case_id,)).fetchone()
+    if case is None:
+        return HTMLResponse("해당 검토 건이 없습니다.", status_code=404)
+    selected = int(org) if org.strip().isdigit() else None
+    t = (timeline.build(conn, org_id=selected, fn=fn or None) if selected is not None
+         else timeline.build(conn, case=case, fn=fn or None))
+    if t["root"] is not None:
+        timeline.layout(t)
+    results = lineage.search_orgs(conn, q) if q.strip() else None
+    return templates.TemplateResponse(request, "_timeline.html", {
+        "case": case, "t": t, "q": q, "results": results, "selected_org": selected,
+        "holders_json": timeline.holders_json(t).replace("</", "<\\/"),
     })
 
 

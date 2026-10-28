@@ -1,5 +1,5 @@
 {# 기능 담당 조직 계보도 조각(읽기 전용). /cases/{id}/lineage 가 반환하며 상세 화면의 펼침 패널에 삽입된다. #}
-<div class="lin">
+<div class="lin" data-org="{{ g.root if g.root is number else '' }}">
   <form class="search" data-lineage-form action="/cases/{{ case.case_id }}/lineage" method="get">
     <input type="text" name="q" value="{{ q }}" placeholder="기관명 · GCC 코드 · 공통기관ID로 검색" aria-label="기관 검색">
     <button type="submit">기관 검색</button>

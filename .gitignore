@@ -8,3 +8,6 @@ __pycache__/
 *.xlsx
 *.xls
 *.xlsm
+
+# 외부 참고 자료(강연 PDF 등)는 저장소에 올리지 않음
+*.pdf

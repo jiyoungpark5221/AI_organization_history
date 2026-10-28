@@ -133,7 +133,7 @@ def test_detail_has_toggle_button_and_unknown_case_404(env):
     c, conn, _ = env
     cid = make_case(conn, "1480041")
     html = c.get(f"/cases/{cid}").text
-    assert "계보도 보기" in html and f'data-url="/cases/{cid}/lineage"' in html
+    assert "계보도 보기" in html and f'data-tab-url="/cases/{cid}/lineage"' in html  # 관계도 탭
     assert c.get("/cases/9999/lineage").status_code == 404
 
 

@@ -56,11 +56,52 @@
   .lin-node.n-appr { border-left:8px solid #17612b; }
   .lin-node h4 { margin:4px 0; font-size:15px; }
   @media (max-width:700px) { .lin-svgwrap { display:none; } }
+  .lin-tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin:10px 0; }
+  .lin-tabs button { border:1px solid var(--line); border-bottom:none; border-radius:6px 6px 0 0; background:transparent; }
+  .lin-tabs button[aria-selected="true"] { background:var(--info-bg); font-weight:700; }
+  .tl { font-size:15px; }
+  .tl-fn { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0; }
+  .tl-fn select { max-width:100%; min-width:0; flex:1 1 260px; }
+  .tl-legend { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; margin:8px 0; font-size:14px; }
+  .tl-legend .lg { display:inline-flex; align-items:center; gap:6px; }
+  .tl-svgwrap { border:1px solid var(--line); border-radius:8px; background:var(--card); padding:6px; }
+  .tl-svg { width:100%; height:auto; display:block; }
+  .tl-svg text { fill:var(--text); font-size:13px; }
+  .tl-svg .tl-id { font-weight:700; font-size:14px; }
+  .tl-svg .tl-sub, .tl-svg .tl-tick { fill:var(--muted); font-size:12px; }
+  .tl-svg .tl-grid { stroke:var(--line); stroke-width:1; }
+  .tl-svg .tl-axis { stroke:var(--muted); stroke-width:1.2; }
+  .tl-seg, .tl-legend .tl-seg { fill:#e4e1da; stroke:#9a958b; stroke-width:1; }
+  .tl-open, .tl-legend .tl-open { fill:url(#tl-hatch); stroke:#9a958b; stroke-width:1; stroke-dasharray:4 3; opacity:.85; }
+  .tl-legend .tl-open { fill:#efede8; }
+  .tl-hatch-bg { fill:#efede8; } .tl-hatch-line { stroke:#c4bfb4; stroke-width:3; }
+  .tl-own, .tl-legend .tl-own { fill:#f6c27a; stroke:#a8630a; stroke-width:1.5; }
+  .tl-pre { fill:url(#tl-hatch-own); stroke:#a8630a; stroke-dasharray:3 3; }
+  .tl-pre-bg { fill:#fbe3c0; } .tl-pre-line { stroke:#e3a24b; stroke-width:2; }
+  .tl-svg .tl-bar-text { fill:#3b3a37; font-size:12px; }
+  .tl-svg .tl-own-text { fill:#5a3300; font-size:12px; font-weight:700; }
+  .tl-svg .tl-unk { fill:#a3361f; font-size:11px; font-weight:700; }
+  .tl-svg .tl-work { fill:var(--muted); font-size:11px; }
+  .tl-rename, .tl-legend .tl-rename { stroke:#555; stroke-width:1.6; stroke-dasharray:3 3; }
+  .tl-arrow { fill:none; stroke:#7a4a06; stroke-width:2; }
+  .tl-arrowhead { fill:#7a4a06; }
+  .tl-yearline { stroke:#2f6fdb; stroke-width:1.6; stroke-dasharray:4 4; }
+  .tl-slider { display:flex; align-items:center; gap:10px; margin:10px 0; }
+  .tl-slider input { flex:1; min-width:0; }
+  .tl-slider output { font-weight:700; min-width:3em; text-align:right; }
+  .tl-holder { background:var(--info-bg); border-radius:8px; padding:10px 14px; margin:8px 0; }
+  .tl-holder-name { font-size:18px; font-weight:700; margin:2px 0; }
+  .tl-events tr.tl-future td { opacity:.45; }
+  .tl-root .tl-id { fill:#2f6fdb; }
 </style>
 <div class="card">
   <button type="button" class="lin-toggle" id="lineage-toggle" aria-expanded="false" aria-controls="lineage-panel">계보도 보기</button>
-  <span class="muted">기능 담당 조직 계보도 (교육 발표용 · 읽기 전용 · 원천 기재 / 검토 후보 / 승인 결과 구분)</span>
-  <div id="lineage-panel" hidden data-url="/cases/{{ case.case_id }}/lineage">
+  <span class="muted">기능 담당 조직 계보도 (읽기 전용 · 원천 기재 / 검토 후보 / 승인 결과 구분)</span>
+  <div id="lineage-panel" hidden data-url="/cases/{{ case.case_id }}/timeline">
+    <div class="lin-tabs" role="tablist" aria-label="계보도 보기 방식">
+      <button type="button" role="tab" aria-selected="true" data-tab-url="/cases/{{ case.case_id }}/timeline">타임라인</button>
+      <button type="button" role="tab" aria-selected="false" data-tab-url="/cases/{{ case.case_id }}/lineage">관계도</button>
+    </div>
     <div id="lineage-body" aria-live="polite"></div>
   </div>
 </div>
@@ -68,12 +109,48 @@
 (function () {
   var btn = document.getElementById('lineage-toggle'), panel = document.getElementById('lineage-panel');
   var body = document.getElementById('lineage-body');
+  var tabs = panel.querySelectorAll('[data-tab-url]');
+  var currentOrg = '';
+  function initTimeline() {
+    var data = body.querySelector('#tl-data'), slider = body.querySelector('#tl-year');
+    if (!data || !slider) { return; }
+    var d = JSON.parse(data.textContent), line = body.querySelector('#tl-yearline');
+    var out = body.querySelector('#tl-year-out'), yr = body.querySelector('#tl-holder-year');
+    var hb = body.querySelector('#tl-holder-body'), rows = body.querySelectorAll('.tl-events tr[data-year]');
+    function esc(s) { var e = document.createElement('span'); e.textContent = s == null ? '' : String(s); return e.innerHTML; }
+    function update() {
+      var y = slider.value, x = d.year_x[y];
+      out.textContent = y; yr.textContent = y;
+      if (line && x != null) { line.setAttribute('x1', x); line.setAttribute('x2', x); }
+      var hs = d.holders[y] || [];
+      hb.innerHTML = hs.length ? hs.map(function (h) {
+        return '<div class="tl-holder-name">' + esc(h.name) + ' (' + esc(h.id) + ')</div><div class="muted">기능: ' + esc(h.task) +
+          ' · ' + esc(h.since) + '부터 · 근거: ' + esc(h.basis) + ' · 승인 ' + esc(h.by) + ' (' + esc(h.at) + ')</div>';
+      }).join('') : '<div class="tl-holder-name">확인된 담당 조직 없음(담당기간 미확인)</div>';
+      rows.forEach(function (r) {
+        var ry = r.getAttribute('data-year');
+        r.classList.toggle('tl-future', !!ry && Number(ry) > Number(y));
+      });
+    }
+    slider.addEventListener('input', update);
+  }
   function load(url) {
     body.textContent = '불러오는 중…';
     fetch(url, {credentials: 'same-origin'}).then(function (r) { return r.text(); })
-      .then(function (h) { body.innerHTML = h; panel.dataset.loaded = '1'; })
+      .then(function (h) {
+        body.innerHTML = h; panel.dataset.loaded = '1';
+        var root = body.querySelector('[data-org]');
+        if (root && root.getAttribute('data-org')) { currentOrg = root.getAttribute('data-org'); }
+        initTimeline();
+      })
       .catch(function () { body.textContent = '계보도를 불러오지 못했습니다. 화면을 새로 고쳐 다시 시도하세요.'; });
   }
+  tabs.forEach(function (tb) {
+    tb.addEventListener('click', function () {
+      tabs.forEach(function (o) { o.setAttribute('aria-selected', o === tb ? 'true' : 'false'); });
+      load(tb.getAttribute('data-tab-url') + (currentOrg ? '?org=' + encodeURIComponent(currentOrg) : ''));
+    });
+  });
   btn.addEventListener('click', function () {
     var opening = panel.hidden;
     panel.hidden = !opening;

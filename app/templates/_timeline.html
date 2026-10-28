@@ -1,0 +1,139 @@
+{# 기능 담당 조직 계보도 — 타임라인 조각(읽기 전용). /cases/{id}/timeline 이 반환하며 상세 화면의 '타임라인' 탭에 삽입된다. #}
+<div class="tl" data-org="{{ t.root if t.root is number else '' }}">
+  <form class="search" data-lineage-form action="/cases/{{ case.case_id }}/timeline" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="기관명 · GCC 코드 · 공통기관ID로 검색" aria-label="기관 검색">
+    <button type="submit">기관 검색</button>
+    {% if selected_org %}<input type="hidden" name="org" value="{{ selected_org }}">{% endif %}
+  </form>
+  {% if results is not none %}
+  <div class="lin-results">
+    {% if results %}
+      <p class="muted">검색 결과 {{ results|length }}건 (최대 20건) — 기관을 선택하세요.</p>
+      <ul>{% for r in results %}
+        <li><a href="#" data-lineage-url="/cases/{{ case.case_id }}/timeline?org={{ r.org_id }}">{{ r.name }}</a>
+          <span class="muted">GCC {{ r.gcc|join(', ') or '없음' }}{% if r.common %} · {{ r.common }}{% endif %}</span></li>
+      {% endfor %}</ul>
+    {% else %}<p class="muted">검색 결과가 없습니다.</p>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if t.root is none %}
+    <div class="alert info">{% if selected_org %}선택한 기관을 찾을 수 없습니다.{% else %}이 건의 기관이 가져온 기관 자료에 없습니다. 위에서 기관을 검색해 선택하세요.{% endif %}</div>
+  {% else %}
+  <form class="tl-fn" data-lineage-form action="/cases/{{ case.case_id }}/timeline" method="get">
+    {% if selected_org %}<input type="hidden" name="org" value="{{ selected_org }}">{% endif %}
+    <label for="tl-fn-{{ case.case_id }}">추적할 기능</label>
+    <select id="tl-fn-{{ case.case_id }}" name="fn">
+      {% for f in t.functions %}
+        <option value="{{ f.text }}" {{ 'selected' if f.text == t.fn }}>[{{ f.src }}] {{ f.text[:60] }}{{ '…' if f.text|length > 60 }}</option>
+      {% endfor %}
+      <option value="__org__" {{ 'selected' if t.fn is none }}>기관 단위(기능 미선택)</option>
+    </select>
+    <button type="submit">보기</button>
+  </form>
+  <p class="tl-current">추적 중: <strong>{{ t.fn or '기관 단위(기능 미선택)' }}</strong></p>
+
+  {% for kind, text in t.notices %}<div class="alert {{ kind }}">{{ text }}</div>{% endfor %}
+
+  <div class="tl-legend" aria-label="범례">
+    <span class="lg"><svg width="30" height="14" aria-hidden="true"><rect x="1" y="1" width="28" height="12" rx="3" class="tl-own"/></svg> 기능 담당 — 승인된 업무 이동으로 확인된 구간만</span>
+    <span class="lg"><svg width="30" height="14" aria-hidden="true"><rect x="1" y="1" width="28" height="12" rx="3" class="tl-seg"/></svg> 조직 존속 — 원천 기재 기간(승인된 존립기간 아님)</span>
+    <span class="lg"><svg width="30" height="14" aria-hidden="true"><rect x="1" y="1" width="28" height="12" rx="3" class="tl-open"/></svg> 빗금·흐린 끝 = 날짜 미확인</span>
+    <span class="lg"><svg width="30" height="14" aria-hidden="true"><line x1="15" y1="0" x2="15" y2="14" class="tl-rename"/></svg> 점선 = 명칭만 변경(조직ID 유지)</span>
+    <span class="lg">↳ 화살표 = 날짜가 있는 승인된 업무 이동만</span>
+  </div>
+
+  {% if t.axis %}
+  {% set s = t.svg %}
+  <div class="tl-svgwrap">
+  <svg class="tl-svg" viewBox="0 0 {{ s.w }} {{ s.h }}" role="img" aria-label="기능 담당 조직 타임라인" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="tl-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="8" height="8" class="tl-hatch-bg"/><line x1="0" y1="0" x2="0" y2="8" class="tl-hatch-line"/>
+      </pattern>
+      <pattern id="tl-hatch-own" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="7" height="7" class="tl-pre-bg"/><line x1="0" y1="0" x2="0" y2="7" class="tl-pre-line"/>
+      </pattern>
+      <marker id="tl-arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" class="tl-arrowhead"/>
+      </marker>
+    </defs>
+    {% for tk in s.ticks %}
+      <line x1="{{ tk.x }}" y1="{{ s.top }}" x2="{{ tk.x }}" y2="{{ s.bottom }}" class="tl-grid"/>
+      <text x="{{ tk.x }}" y="{{ s.bottom + 22 }}" text-anchor="middle" class="tl-tick">{{ tk.y }}</text>
+    {% endfor %}
+    <line x1="{{ s.x0 }}" y1="{{ s.bottom }}" x2="{{ s.x1 }}" y2="{{ s.bottom }}" class="tl-axis"/>
+    {% for row in t.rows %}
+      <g class="tl-row{{ ' tl-root' if row.is_root }}">
+        <text x="10" y="{{ row.cy - 4 }}" class="tl-id">{{ row.id_label }}</text>
+        <text x="10" y="{{ row.cy + 14 }}" class="tl-sub">{{ (row.name[:15] ~ ('…' if row.name|length > 15 else '')) }}</text>
+        <title>{{ row.name }} · GCC {{ row.gcc|join(', ') or '없음' }}</title>
+        {% for sg in row.segs if sg.draw %}
+          <rect x="{{ sg.x1 }}" y="{{ row.by }}" width="{{ sg.x2 - sg.x1 }}" height="{{ 26 }}" rx="4"
+                class="{{ 'tl-open' if sg.open_start or sg.open_end else 'tl-seg' }}"><title>{{ sg.name }}: 원천 기재 {{ sg.start or '시작 미확인' }} ~ {{ sg.end or '종료 미확인' }}</title></rect>
+          {% if sg.label %}<text x="{{ (sg.x1 + sg.x2) / 2 }}" y="{{ row.cy + 5 }}" text-anchor="middle" class="tl-bar-text">{{ sg.label }}</text>{% endif %}
+          {% if sg.open_start %}<text x="{{ sg.x1 + 4 }}" y="{{ row.by - 3 }}" class="tl-unk">시작 미확인</text>{% endif %}
+          {% if sg.open_end %}<text x="{{ sg.x2 - 4 }}" y="{{ row.by - 3 }}" text-anchor="end" class="tl-unk">종료 미확인</text>{% endif %}
+          {% if sg.renamed %}<line x1="{{ sg.x1 }}" y1="{{ row.by - 4 }}" x2="{{ sg.x1 }}" y2="{{ row.by + 30 }}" class="tl-rename" data-rename="1"/>{% endif %}
+        {% endfor %}
+        {% for o in row.orange %}
+          <rect x="{{ o.x1 }}" y="{{ row.by }}" width="{{ o.x2 - o.x1 }}" height="26" rx="4" class="tl-own" data-own="1"><title>기능 담당(승인): {{ o.task }} · {{ o.start }} ~ {{ o.end or '종료 미확인' }}</title></rect>
+          {% if o.label %}<text x="{{ (o.x1 + o.x2) / 2 }}" y="{{ row.cy + 5 }}" text-anchor="middle" class="tl-own-text">{{ o.label }}</text>{% endif %}
+          {% if o.open_end %}<text x="{{ o.x2 - 4 }}" y="{{ row.by + 40 }}" text-anchor="end" class="tl-unk">담당 종료 미확인</text>{% endif %}
+        {% endfor %}
+        {% for p in row.pre %}
+          <rect x="{{ p.x1 }}" y="{{ row.by }}" width="{{ p.x2 - p.x1 }}" height="26" class="tl-pre"><title>이관 전 담당(시작 미확인)</title></rect>
+          <text x="{{ p.x1 }}" y="{{ row.by + 40 }}" class="tl-unk">이관 전 담당(시작 미확인)</text>
+        {% endfor %}
+        {% if row.note %}<text x="{{ s.x0 + 6 }}" y="{{ row.cy + 5 }}" class="tl-unk">{{ row.note }}</text>{% endif %}
+        {% if row.works_n %}<text x="{{ s.x1 }}" y="{{ row.by + 40 }}" text-anchor="end" class="tl-work">원천 업무 기재 {{ row.works_n }}건 · 담당기간 미확인</text>{% endif %}
+      </g>
+    {% endfor %}
+    {% for a in t.arrows %}
+      <path d="{{ a.d }}" class="tl-arrow" data-tl-arrow="1" marker-end="url(#tl-arrowhead)"/>
+    {% endfor %}
+    <line id="tl-yearline" x1="{{ s.line_x }}" y1="{{ s.top - 6 }}" x2="{{ s.line_x }}" y2="{{ s.bottom }}" class="tl-yearline"/>
+  </svg>
+  </div>
+
+  <div class="tl-slider">
+    <label for="tl-year">기준 연도</label>
+    <input type="range" id="tl-year" min="{{ t.slider.min }}" max="{{ t.slider.max }}" step="1" value="{{ t.slider.value }}">
+    <output id="tl-year-out" for="tl-year">{{ t.slider.value }}</output>
+  </div>
+  {% set hs = t.holders[t.slider.value|string] %}
+  <div class="tl-holder" id="tl-holder" aria-live="polite">
+    <div class="muted">이 시점 담당 조직 (<span id="tl-holder-year">{{ t.slider.value }}</span>년)</div>
+    <div id="tl-holder-body">
+    {% if hs %}
+      {% for h in hs %}
+        <div class="tl-holder-name">{{ h.name }} ({{ h.id }})</div>
+        <div class="muted">기능: {{ h.task }} · {{ h.since }}부터 · 근거: {{ h.basis }} · 승인 {{ h.by }} ({{ h.at }})</div>
+      {% endfor %}
+    {% else %}
+      <div class="tl-holder-name">확인된 담당 조직 없음(담당기간 미확인)</div>
+    {% endif %}
+    </div>
+  </div>
+  <script type="application/json" id="tl-data">{{ holders_json|safe }}</script>
+  {% else %}
+    <p class="muted">시간축 없음 — 아래 사건 표만 표시합니다.</p>
+  {% endif %}
+
+  <h3>사건</h3>
+  <div class="table-wrap"><table class="tl-events">
+    <thead><tr><th>일자</th><th>유형</th><th>설명</th><th>출처</th></tr></thead>
+    <tbody>
+    {% for e in t.events %}
+      <tr data-year="{{ e.year or '' }}" class="{{ 'tl-future' if (t.slider and e.year and e.year > t.slider.value) }}{{ ' tl-undated' if not e.year }}">
+        <td>{{ e.date_text }}</td><td>{{ e.type }}</td><td>{{ e.desc }}</td>
+        <td><span class="badge {{ 'ok' if e.layer == '승인 결과' else ('warn' if e.layer == '검토 후보' else '') }}">{{ e.layer }}</span></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">표시할 사건이 없습니다.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">원천 기재 기간은 원천 자료에 적힌 생성·종료일이며 승인된 존립기간이나 업무 담당기간이 아닙니다. 날짜가 없으면 '미확인'으로 두고 추정하지 않습니다.</p>
+  {% endif %}
+</div>
