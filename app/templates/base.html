@@ -1,3 +1,34 @@
+{#-
+  공통 레이아웃과 디자인 시스템.
+
+  ▣ 사용법 — 매크로는 _ui.html 에 있다:  {% from "_ui.html" import badge, steps, can_do, empty_state, error_box, loading, skeleton, toasts %}
+
+  1) 출처/상태 배지  {{ badge('src') }}  → 종류: src(원천 기재) ai(AI 제안(후보)) appr(승인 결과) unk(미확인)
+     lack(자료 부족) conflict(원천 충돌) fail(실패).  {{ badge('unk', '날짜 미확인') }} 처럼 문구만 바꿀 수 있다.
+     색 외에 아이콘(◇ ◌ ✔ ? ! ⇄ ✕)과 테두리 모양(실선·점선·굵은선)으로도 구분된다. 직접 쓰려면
+     <span class="badge src"><span class="badge-icon" aria-hidden="true">◇</span>원천 기재</span>
+     기존 .badge / .badge.ok / .badge.warn / .badge.bad 도 그대로 쓸 수 있다.
+  2) 4단계 진행바  {{ steps(['done','done','current','todo'], notes=['','후보 3건','','']) }}
+     단계: 변경 탐지 → AI 분석 → 담당자 검토 → 확정 저장. 상태: done / current / todo / warn / error.
+  3) 2단 안내  {{ can_do(['자동으로 하는 일', ...], ['담당자 승인이 필요한 일', ...]) }}  (.can-do > .auto / .human)
+  4) 빈 상태  {{ empty_state('새로운 변경사항이 없습니다', '마지막 수집(…)에서 변경이 없었습니다.',
+                [{'label':'승인 완료 보기','href':'/?status=승인 완료'}, {'label':'지금 실행','href':'/settings#run','primary':true}]) }}
+  5) 오류 상자  {{ error_box('사유', retry_href='/cases/1') }}  — retry_form='폼id' 이면 그 폼을 다시 제출,
+     둘 다 없으면 '다시 시도'가 새로고침. 제목은 title= 로 바꾼다.
+  6) 로딩  {{ loading('계보도를 불러오는 중…') }} / {{ skeleton(3) }}  (prefers-reduced-motion 이면 애니메이션 없음)
+     fetch 로 조각을 불러올 때: 먼저 loading() 을 넣고, 실패하면 error_box() 와 같은 마크업으로 바꾼다.
+  7) 알림(토스트)  {{ toasts(ok=ok, error=error, ok_link=('/', '목록에서 확인')) }}  — 화면 상단 고정, aria-live,
+     닫기 버튼, 성공 알림은 8초 뒤 자동으로 닫히고 주소의 ?ok= / ?error= 는 새로고침 시 다시 뜨지 않게 지운다.
+  8) 중복 입력 제어  <form method="post" data-once> … <button name="action" value="승인" data-busy-text="승인 처리 중…">
+     제출하면 그 폼의 버튼이 모두 비활성화되고 누른 버튼 문구가 '처리 중…'(또는 data-busy-text)로 바뀐다.
+     누른 버튼의 name/value 는 숨은 입력으로 옮겨 서버에 그대로 전달된다. 뒤로 가기(pageshow)로 돌아오면 복구된다.
+     폼 안에 <div data-loading hidden>{{ loading('실행 중…') }}</div> 를 두면 제출 중에 보인다.
+  ※ 샘플 배포 배너(.sample-banner)는 VERCEL 또는 APP_SAMPLE_BOOTSTRAP=1 일 때 헤더 아래에 자동으로 나온다(전역 sample_deploy()).
+  9) 그 밖의 클래스: .card .grid .stat(.label/.value) .alert(.ok/.info/.warn) .tabs a.on .table-wrap .actions
+     .cols .muted .help .search .btn .btn.primary button.primary button.danger .sr-only
+  토큰: --bg --surface(=--card) --line --text --muted --accent --on-accent --focus --ok/--ok-bg --warn/--warn-bg
+        --bad/--bad-bg --info/--info-bg --sp-1..--sp-5 --radius --font. 라이트/다크 자동 대응, 본문 대비 4.5:1 이상.
+-#}
 <!doctype html>
 <html lang="ko">
 <head>
@@ -5,61 +36,163 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}기관 연혁 승인 도구{% endblock %}</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --line:#d9dde3; --text:#1d2430; --muted:#5d6675; --accent:#1f5fbf;
-          --warn-bg:#fff4d6; --warn:#8a5a00; --bad-bg:#fde4e4; --bad:#a11d1d; --ok-bg:#e1f4e6; --ok:#17612b;
-          --info-bg:#e6eefb; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#14181f; --card:#1d232d; --line:#343c49; --text:#e6e9ee; --muted:#a2abb9; --accent:#7ab0ff;
-            --warn-bg:#3b2f10; --warn:#f3cd78; --bad-bg:#431c1c; --bad:#ffaaaa; --ok-bg:#16351f; --ok:#8fe0a6;
-            --info-bg:#1b2a44; }
+  :root {
+    --bg:#f5f6f8; --surface:#ffffff; --card:var(--surface); --line:#d5dae1; --text:#1b2330; --muted:#566070;
+    --accent:#1d5bbf; --on-accent:#ffffff; --focus:#f2a900;
+    --ok:#155f2a; --ok-bg:#e1f3e6; --warn:#7f5200; --warn-bg:#fff1cf; --bad:#a01b1b; --bad-bg:#fde3e3;
+    --info:#1b3f78; --info-bg:#e7eefb;
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --radius:8px;
+    --font:"Pretendard","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    --shadow:0 6px 24px rgba(15,23,42,.14);
+    color-scheme: light dark;
   }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 "Malgun Gothic","Apple SD Gothic Neo",sans-serif; }
-  header.top { background:var(--card); border-bottom:1px solid var(--line); padding:10px 16px;
-               display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
-  header.top a { color:var(--text); text-decoration:none; font-weight:600; }
-  header.top a.active { color:var(--accent); }
-  main { max-width:1100px; margin:0 auto; padding:16px; }
-  h1 { font-size:20px; margin:4px 0 12px; } h2 { font-size:17px; margin:20px 0 8px; } h3 { font-size:15px; margin:0 0 6px; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#12161d; --surface:#1b212b; --line:#333c4a; --text:#e7eaef; --muted:#a6afbd;
+      --accent:#7cb2ff; --on-accent:#0b1a33; --focus:#ffc94d;
+      --ok:#93e2aa; --ok-bg:#163520; --warn:#f4d07f; --warn-bg:#3a2e10; --bad:#ffb0b0; --bad-bg:#45191b;
+      --info:#b9d1ff; --info-bg:#1a2a45; --shadow:0 6px 24px rgba(0,0,0,.5);
+    }
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 var(--font); overflow-x:hidden; }
+  img, svg, video { max-width:100%; }
   a { color:var(--accent); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; margin:12px 0; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
-  .stat .label { color:var(--muted); font-size:13px; } .stat .value { font-size:18px; font-weight:700; }
-  .alert { padding:10px 12px; border-radius:6px; margin:8px 0; background:var(--bad-bg); color:var(--bad); font-weight:600; }
-  .alert.ok { background:var(--ok-bg); color:var(--ok); } .alert.info { background:var(--info-bg); color:var(--text); font-weight:400; }
+  :focus-visible { outline:3px solid var(--focus); outline-offset:2px; border-radius:3px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .skip { position:absolute; left:8px; top:-40px; background:var(--accent); color:var(--on-accent); padding:6px 10px; border-radius:6px; z-index:50; }
+  .skip:focus { top:8px; }
+
+  /* 상단 헤더 */
+  header.top { background:var(--surface); border-bottom:1px solid var(--line); padding:var(--sp-2) var(--sp-4);
+               display:flex; gap:var(--sp-2) var(--sp-4); align-items:center; flex-wrap:wrap; }
+  header.top .brand { font-weight:700; color:var(--text); text-decoration:none; margin-right:var(--sp-2); }
+  header.top nav { display:flex; gap:var(--sp-1); flex-wrap:wrap; }
+  header.top nav a { color:var(--text); text-decoration:none; font-weight:600; padding:6px 10px; border-radius:6px; }
+  header.top nav a:hover { background:var(--bg); }
+  header.top a.active { color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+  .userbar { margin-left:auto; display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap; }
+  .sample-banner { display:flex; gap:var(--sp-2); align-items:flex-start; padding:var(--sp-2) var(--sp-4); background:var(--info-bg);
+                   color:var(--text); border-bottom:1px solid var(--line); font-size:14px; }
+  .sample-banner > span:first-child { color:var(--info); font-weight:700; }
+
+  main { max-width:1100px; margin:0 auto; padding:var(--sp-4); }
+  h1 { font-size:21px; margin:4px 0 12px; line-height:1.35; } h2 { font-size:17px; margin:20px 0 8px; } h3 { font-size:15px; margin:0 0 6px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:var(--sp-4); margin:var(--sp-3) 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:var(--sp-3); }
+  .stat .label { color:var(--muted); font-size:13px; } .stat .value { font-size:19px; font-weight:700; }
+  .muted { color:var(--muted); font-size:13px; }
+  .help { color:var(--muted); font-size:13px; margin:2px 0 var(--sp-2); }
+
+  /* 안내 줄 */
+  .alert { padding:10px 12px; border-radius:6px; margin:var(--sp-2) 0; background:var(--bad-bg); color:var(--bad); font-weight:600;
+           border-left:4px solid currentColor; }
+  .alert.ok { background:var(--ok-bg); color:var(--ok); } .alert.info { background:var(--info-bg); color:var(--text); font-weight:400; border-left-color:var(--info); }
   .alert.warn { background:var(--warn-bg); color:var(--warn); }
-  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; margin-right:4px;
-           background:var(--info-bg); color:var(--text); }
-  .badge.warn { background:var(--warn-bg); color:var(--warn); } .badge.bad { background:var(--bad-bg); color:var(--bad); }
-  .badge.ok { background:var(--ok-bg); color:var(--ok); }
+
+  /* 배지: 색 + 아이콘 + 테두리 모양 */
+  .badge { display:inline-flex; align-items:center; gap:3px; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600;
+           margin-right:4px; background:var(--info-bg); color:var(--text); border:1px solid transparent; line-height:1.6; white-space:nowrap; }
+  .badge.ok { background:var(--ok-bg); color:var(--ok); } .badge.warn { background:var(--warn-bg); color:var(--warn); }
+  .badge.bad { background:var(--bad-bg); color:var(--bad); }
+  .badge-icon { font-size:11px; }
+  .badge.src { background:var(--surface); color:var(--text); border:1px solid var(--muted); }
+  .badge.ai { background:var(--info-bg); color:var(--info); border:1px dashed var(--info); }
+  .badge.appr { background:var(--ok-bg); color:var(--ok); border:2px solid var(--ok); }
+  .badge.unk { background:var(--warn-bg); color:var(--warn); border:1px dotted var(--warn); }
+  .badge.lack { background:var(--warn-bg); color:var(--warn); border:1px solid var(--warn); }
+  .badge.conflict { background:var(--bad-bg); color:var(--bad); border:1px dashed var(--bad); }
+  .badge.fail { background:var(--bad-bg); color:var(--bad); border:2px solid var(--bad); }
+
+  /* 4단계 진행바 */
+  .steps { list-style:none; margin:var(--sp-3) 0; padding:0; display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sp-2); counter-reset:step; }
+  .steps .step { position:relative; display:flex; flex-direction:column; gap:2px; padding:var(--sp-2) var(--sp-3);
+                 border-top:4px solid var(--line); background:var(--surface); border-radius:0 0 6px 6px; }
+  .steps .step-icon { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; border-radius:50%;
+                      border:2px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); }
+  .steps .step-name { font-weight:700; } .steps .step-state { font-size:12px; color:var(--muted); }
+  .steps .done { border-top-color:var(--ok); } .steps .done .step-icon { border-color:var(--ok); color:var(--ok); }
+  .steps .current { border-top-color:var(--accent); } .steps .current .step-icon { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .steps .current .step-state { color:var(--accent); font-weight:700; }
+  .steps .warn { border-top-color:var(--warn); } .steps .warn .step-icon { border-color:var(--warn); color:var(--warn); }
+  .steps .error { border-top-color:var(--bad); } .steps .error .step-icon { border-color:var(--bad); color:var(--bad); }
+  .steps .todo .step-name { color:var(--muted); }
+  @media (max-width:640px) { .steps { grid-template-columns:1fr 1fr; } }
+
+  /* 2단 안내 */
+  .can-do { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); margin:var(--sp-3) 0; }
+  .can-do > div { border:1px solid var(--line); border-radius:var(--radius); padding:var(--sp-3) var(--sp-4); background:var(--surface); }
+  .can-do .auto { border-left:4px solid var(--info); } .can-do .human { border-left:4px solid var(--ok); }
+  .can-do h3 { display:flex; gap:6px; align-items:center; font-size:14px; }
+  .can-do ul { margin:4px 0 0; padding-left:18px; } .can-do li { margin:2px 0; }
+  @media (max-width:700px) { .can-do { grid-template-columns:1fr; } }
+
+  /* 빈 상태 · 오류 · 로딩 */
+  .empty-state { text-align:center; padding:var(--sp-5) var(--sp-4); border:1px dashed var(--line); border-radius:var(--radius); background:var(--surface); margin:var(--sp-3) 0; }
+  .empty-state .empty-icon { font-size:28px; color:var(--muted); }
+  .empty-state h2 { margin:6px 0; } .empty-state p { color:var(--muted); margin:4px auto 0; max-width:560px; }
+  .empty-state .actions { justify-content:center; }
+  .error-box { border:1px solid var(--bad); border-left-width:4px; background:var(--bad-bg); color:var(--text); border-radius:var(--radius);
+               padding:var(--sp-3) var(--sp-4); margin:var(--sp-3) 0; }
+  .error-box h3 { color:var(--bad); display:flex; gap:6px; align-items:center; }
+  .error-box .actions { margin-top:var(--sp-2); }
+  .loading { display:flex; align-items:center; gap:var(--sp-2); color:var(--muted); padding:var(--sp-3) 0; }
+  .spinner { width:18px; height:18px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--accent); animation:spin .8s linear infinite; flex:none; }
+  .skeleton { display:grid; gap:8px; padding:var(--sp-2) 0; }
+  .skeleton span { display:block; height:12px; border-radius:6px; background:linear-gradient(90deg,var(--line),var(--bg),var(--line)); background-size:200% 100%; animation:shimmer 1.2s ease-in-out infinite; }
+  .skeleton span:nth-child(3n) { width:60%; } .skeleton span:nth-child(3n+2) { width:85%; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .spinner, .skeleton span { animation:none; } }
+
+  /* 알림(토스트) */
+  .toast-region { position:fixed; top:var(--sp-3); left:50%; transform:translateX(-50%); z-index:40; display:grid; gap:var(--sp-2);
+                  width:min(560px, calc(100% - 32px)); pointer-events:none; }
+  .toast { pointer-events:auto; display:flex; gap:var(--sp-2); align-items:flex-start; padding:10px 12px; border-radius:var(--radius);
+           box-shadow:var(--shadow); border:1px solid var(--line); background:var(--surface); color:var(--text); border-left:5px solid var(--info); }
+  .toast.ok { border-left-color:var(--ok); } .toast.error { border-left-color:var(--bad); }
+  .toast .toast-icon { font-weight:700; } .toast.ok .toast-icon { color:var(--ok); } .toast.error .toast-icon { color:var(--bad); }
+  .toast .toast-body { flex:1; overflow-wrap:anywhere; } .toast .toast-body a { font-weight:600; }
+  .toast button.toast-close { border:0; background:transparent; padding:0 4px; font-size:18px; line-height:1; color:var(--muted); }
+
+  /* 탭 · 표 · 입력 · 버튼 */
   .tabs a { display:inline-block; padding:5px 12px; border:1px solid var(--line); border-radius:16px; margin:0 4px 6px 0;
-            text-decoration:none; color:var(--text); background:var(--card); }
-  .tabs a.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+            text-decoration:none; color:var(--text); background:var(--surface); }
+  .tabs a.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
   table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--muted); font-size:13px; font-weight:600; }
-  .table-wrap { overflow-x:auto; }
-  input[type=text], select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px;
-        background:var(--bg); color:var(--text); font:inherit; }
-  label { display:block; font-size:13px; color:var(--muted); margin:8px 0 2px; }
-  button, .btn { padding:7px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text);
-        font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
-  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  button.danger { color:var(--bad); }
-  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-  .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:700px){ .cols { grid-template-columns:1fr; } }
+  .table-wrap { overflow-x:auto; max-width:100%; }
+  input[type=text], input[type=password], input[type=search], input[type=date], input[type=file], select, textarea {
+        width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 2px; font-weight:600; }
+  button, .btn { padding:7px 14px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text);
+        font:inherit; cursor:pointer; text-decoration:none; display:inline-block; min-height:36px; }
+  button:hover, .btn:hover { border-color:var(--muted); }
+  button.primary, .btn.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:600; }
+  button.danger { color:var(--bad); border-color:var(--bad); }
+  button:disabled, button[aria-disabled=true] { opacity:.6; cursor:progress; }
+  .actions { display:flex; flex-wrap:wrap; gap:var(--sp-2); margin-top:var(--sp-3); align-items:center; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); } @media (max-width:700px){ .cols { grid-template-columns:1fr; } }
   details { margin:6px 0; } summary { cursor:pointer; color:var(--accent); }
   blockquote { margin:6px 0; padding:6px 10px; border-left:3px solid var(--line); color:var(--muted); white-space:pre-wrap; }
-  .muted { color:var(--muted); font-size:13px; }
-  .userbar { margin-left:auto; display:flex; gap:8px; align-items:center; }
-  .search { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; } .search input { max-width:260px; }
+  code { font-size:13px; background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:0 4px; overflow-wrap:anywhere; }
+  .search { display:flex; gap:var(--sp-2); flex-wrap:wrap; margin-bottom:var(--sp-2); } .search input { max-width:260px; }
+  @media (max-width:640px) { main { padding:var(--sp-4); } .userbar { margin-left:0; } }
 </style>
+{% block head %}{% endblock %}
 </head>
 <body>
+<a class="skip" href="#main">본문 바로가기</a>
 <header class="top">
-  <span>기관 연혁·업무 변동 승인 도구</span>
+  <a class="brand" href="/">기관 연혁·업무 변동 승인 도구</a>
   {% if request.state.user %}
-  <a href="/" class="{{ 'active' if request.url.path == '/' or request.url.path.startswith('/cases') }}">변경·승인 목록</a>
-  <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">설정</a>
+  {% set on_list = request.url.path == '/' or request.url.path.startswith('/cases') %}
+  {% set on_settings = request.url.path.startswith('/settings') %}
+  <nav aria-label="주 메뉴">
+    <a href="/" class="{{ 'active' if on_list }}"{% if on_list %} aria-current="page"{% endif %}>변경·승인 목록</a>
+    <a href="/settings" class="{{ 'active' if on_settings }}"{% if on_settings %} aria-current="page"{% endif %}>설정</a>
+  </nav>
   <form method="post" action="/logout" class="userbar">
     <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
     <span class="muted">로그인: <strong>{{ request.state.user.display_name }}</strong></span>
@@ -67,8 +200,75 @@
   </form>
   {% endif %}
 </header>
-<main>
+{% if sample_deploy is defined and sample_deploy() %}
+<div class="sample-banner" role="note">
+  <span aria-hidden="true">ⓘ</span>
+  <span>샘플 배포 화면입니다. 가상 예시 자료로 동작하며, 승인·수정한 내용은 서버가 다시 시작되면 사라지고 샘플 상태로 돌아갑니다.
+    결과가 유지되어야 하는 확인은 로컬 실행 환경에서 해 주세요.</span>
+</div>
+{% endif %}
+<main id="main" tabindex="-1">
 {% block content %}{% endblock %}
 </main>
+<script>
+/* 공통 동작: 중복 제출 방지(data-once), 알림 닫기, 다시 시도. 외부 라이브러리 없음. */
+(function () {
+  function restore(f) {
+    delete f.dataset.busy;
+    f.removeAttribute('aria-busy');
+    f.querySelectorAll('[data-once-copy]').forEach(function (h) { h.remove(); });
+    f.querySelectorAll('button, input[type=submit]').forEach(function (b) {
+      if (b.dataset.onceText !== undefined) { b.textContent = b.dataset.onceText; delete b.dataset.onceText; }
+      b.disabled = false;
+    });
+    f.querySelectorAll('[data-loading]').forEach(function (l) { l.hidden = true; });
+  }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f.matches || !f.matches('form[data-once]')) return;
+    if (f.dataset.busy === '1') { e.preventDefault(); return; }
+    var s = e.submitter;
+    setTimeout(function () {
+      if (e.defaultPrevented) return;          // 다른 스크립트가 제출을 취소했으면 그대로 둔다
+      f.dataset.busy = '1';
+      f.setAttribute('aria-busy', 'true');
+      if (s && s.name) {                       // 비활성화된 버튼 값은 전송되지 않으므로 숨은 입력으로 옮긴다
+        var h = document.createElement('input');
+        h.type = 'hidden'; h.name = s.name; h.value = s.value; h.setAttribute('data-once-copy', '');
+        f.appendChild(h);
+      }
+      f.querySelectorAll('button, input[type=submit]').forEach(function (b) {
+        if (b.tagName === 'BUTTON') b.dataset.onceText = b.textContent;
+        b.disabled = true;
+      });
+      if (s && s.tagName === 'BUTTON') s.textContent = s.dataset.busyText || '처리 중…';
+      f.querySelectorAll('[data-loading]').forEach(function (l) { l.hidden = false; });
+    }, 0);
+  });
+  window.addEventListener('pageshow', function () {
+    document.querySelectorAll('form[data-busy="1"]').forEach(restore);
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-dismiss], [data-retry], [data-retry-form]') : null;
+    if (!t) return;
+    if (t.hasAttribute('data-dismiss')) { var box = t.closest('.toast'); if (box) box.remove(); }
+    else if (t.hasAttribute('data-retry-form')) {
+      var f = document.getElementById(t.getAttribute('data-retry-form'));
+      if (f) { if (f.requestSubmit) f.requestSubmit(); else f.submit(); }
+    } else if (t.hasAttribute('data-retry')) { location.reload(); }
+  });
+  var toasts = document.querySelectorAll('.toast');
+  if (toasts.length) {
+    document.querySelectorAll('.toast.ok').forEach(function (t) { setTimeout(function () { t.remove(); }, 8000); });
+    try {                                      // 새로고침 때 같은 알림이 다시 뜨지 않게 주소의 ok/error 를 지운다
+      var u = new URL(location.href);
+      if (u.searchParams.has('ok') || u.searchParams.has('error')) {
+        u.searchParams.delete('ok'); u.searchParams.delete('error');
+        history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+      }
+    } catch (err) {}
+  }
+})();
+</script>
 </body>
 </html>

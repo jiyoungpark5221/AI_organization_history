@@ -10,15 +10,18 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import adapters, auth, daily, lineage, review, timeline
+from . import adapters, auth, daily, lineage, review, sample_bootstrap, timeline
 from .db import DEFAULT_SETTINGS, connect, get_setting, init_db, set_setting
 from .export import export_csv
 
 app = FastAPI(title="기관 연혁·업무 변동 승인 도구")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+# 샘플 배포(Vercel 등) 여부. 렌더링할 때마다 환경변수를 확인하도록 함수 그대로 넘긴다(로그인 화면 포함 모든 화면).
+templates.env.globals["sample_deploy"] = sample_bootstrap.enabled
 
 FILTERS = ["승인 대기", "보류", "승인 완료", "기각", "전체"]
 KINDS = {"relation": "기관관계 후보", "task_move": "업무 이동 후보"}
@@ -157,10 +160,39 @@ async def require_user_csrf(request: Request, user=Depends(require_user)):
 
 @app.exception_handler(NotAuthenticated)
 async def _not_authenticated(request: Request, exc: NotAuthenticated):
-    resp = _redirect("/login?next=" + quote(exc.next_url, safe="/"))
+    url = "/login?next=" + quote(exc.next_url, safe="/")
+    if exc.had_session:  # 로그인했던 세션이 만료되거나 계정이 비활성화된 경우: 이유를 안내한다.
+        url += "&reason=expired"
+    resp = _redirect(url)
     if exc.had_session:
         resp.delete_cookie(SESSION_COOKIE, path="/")
     return resp
+
+
+@app.exception_handler(HTTPException)
+async def _http_error(request: Request, exc: HTTPException):
+    """CSRF 거부(403)는 상태 코드는 그대로 두고, 무엇을 하면 되는지 알려주는 화면으로 보여준다."""
+    if exc.status_code != 403:
+        return await http_exception_handler(request, exc)
+    return templates.TemplateResponse(request, "error.html", {
+        "title": "요청을 처리하지 못했습니다",
+        "box_title": "화면이 오래되어 다시 시도해 주세요",
+        "reason": "열어 둔 화면이 오래되었거나 다른 창에서 로그인·로그아웃해 이 요청을 확인할 수 없었습니다. "
+                  "아무것도 저장되지 않았습니다.",
+        "detail": "새로고침한 뒤 같은 작업을 다시 해 주세요. 계속되면 로그아웃 후 다시 로그인하세요.",
+        "retry_href": _safe_next(_referer_path(request)),
+        "retry_label": "새로고침해서 다시 시도",
+    }, status_code=403)
+
+
+def _referer_path(request: Request) -> str:
+    """같은 사이트에서 온 요청이면 직전 화면의 경로를, 아니면 목록을 돌려준다."""
+    ref = request.headers.get("referer") or ""
+    host = request.url.netloc
+    for scheme in ("http://", "https://"):
+        if host and ref.startswith(scheme + host + "/"):
+            return ref[len(scheme + host):]
+    return "/"
 
 
 def _locked(login_id: str) -> bool:
@@ -175,19 +207,22 @@ def _record_failure(login_id: str) -> None:
     _login_failures[login_id.lower()] = (count + 1, time.time())
 
 
-def _login_page(request: Request, csrf: str, next_url: str, error: str = "", status_code: int = 200):
+def _login_page(request: Request, csrf: str, next_url: str, error: str = "", status_code: int = 200,
+                reason: str = ""):
     request.state.user = None
     request.state.csrf = csrf
-    return templates.TemplateResponse(request, "login.html", {"next_url": next_url, "error": error},
+    return templates.TemplateResponse(request, "login.html",
+                                      {"next_url": next_url, "error": error, "reason": reason},
                                       status_code=status_code)
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_form(request: Request, next: str = "/", conn=Depends(get_conn)):
+async def login_form(request: Request, next: str = "/", reason: str = "", conn=Depends(get_conn)):
     sess = _read_session(request)
     if sess and auth.get_active_user(conn, sess.get("uid")):
         return _redirect(_safe_next(next))
-    resp = _login_page(request, sess["csrf"] if sess else secrets.token_urlsafe(24), _safe_next(next))
+    resp = _login_page(request, sess["csrf"] if sess else secrets.token_urlsafe(24), _safe_next(next),
+                       reason="expired" if reason == "expired" else "")
     if not sess:
         _start_session(resp, request, None, request.state.csrf)
     return resp
@@ -374,11 +409,27 @@ async def export(conn=Depends(get_conn), user=Depends(require_user)):
 
 
 # ---------------------------------------------------------------- 설정
+SETTINGS_FORMS = ("save", "upload", "run")
+
+
+def _settings_redirect(key: str, msg: str, form: str = "", day: str = "") -> RedirectResponse:
+    """결과를 알리며 설정 화면으로 돌아간다. form·day 는 실패한 카드에서 바로 다시 시도할 수 있게 넘긴다."""
+    url = f"/settings?{key}={quote(msg)}"
+    if form:
+        url += f"&form={form}"
+    if day and re.fullmatch(r"[0-9-]{1,10}", day):
+        url += f"&day={day}"
+    return _redirect(url)
+
+
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, error: str = "", ok: str = "", conn=Depends(get_conn),
-                        user=Depends(require_user)):
+async def settings_page(request: Request, error: str = "", ok: str = "", form: str = "", day: str = "",
+                        conn=Depends(get_conn), user=Depends(require_user)):
     values = {k: get_setting(conn, k) for k in DEFAULT_SETTINGS}
-    return templates.TemplateResponse(request, "settings.html", {"s": values, "error": error, "ok": ok})
+    return templates.TemplateResponse(request, "settings.html", {
+        "s": values, "error": error, "ok": ok,
+        "form": form if form in SETTINGS_FORMS else "", "day": day if re.fullmatch(r"[0-9-]{0,10}", day) else "",
+    })
 
 
 @app.post("/settings")
@@ -386,30 +437,31 @@ async def settings_save(schedule_time: str = Form(...), gcc_dir: str = Form(...)
                   llm_dir: str = Form(...), conn=Depends(get_conn),
                         user=Depends(require_user_csrf)):
     if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", schedule_time.strip()):
-        return _redirect("/settings?error=" + quote("수집 시각은 HH:MM 형식으로 입력하세요."))
+        return _settings_redirect("error", "수집 시각은 HH:MM 형식으로 입력하세요. (예: 06:00)", "save")
     for k, v in (("schedule_time", schedule_time), ("gcc_dir", gcc_dir), ("law_dir", law_dir), ("llm_dir", llm_dir)):
         if not v.strip():
-            return _redirect("/settings?error=" + quote("비어 있는 설정이 있습니다."))
+            return _settings_redirect("error", "비어 있는 설정이 있습니다. 모든 칸을 채운 뒤 다시 저장하세요.", "save")
         set_setting(conn, k, v.strip())
-    return _redirect("/settings?ok=" + quote("설정을 저장했습니다."))
+    return _settings_redirect("ok", "설정을 저장했습니다.")
 
 
 @app.post("/settings/upload-gcc")
 async def upload_gcc(day: str = Form(...), file: UploadFile = File(...), conn=Depends(get_conn),
                      user=Depends(require_user_csrf)):
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day.strip()):
-        return _redirect("/settings?error=" + quote("날짜는 YYYY-MM-DD 형식으로 입력하세요."))
+    day = day.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        return _settings_redirect("error", "날짜는 YYYY-MM-DD 형식으로 입력하세요. (예: 2026-10-02)", "upload", day)
     raw = await file.read()
     try:
         data = json.loads(raw.decode("utf-8-sig"))
         if not isinstance(data, dict) or not isinstance(data.get("records"), list):
             raise ValueError('최상위에 "records" 목록이 있어야 합니다.')
     except (UnicodeDecodeError, ValueError) as e:  # JSONDecodeError 는 ValueError 의 하위 클래스
-        return _redirect("/settings?error=" + quote(f"파일 형식 오류: {e}"))
+        return _settings_redirect("error", f"파일 형식 오류: {e}", "upload", day)
     target = Path(get_setting(conn, "gcc_dir"))
     target.mkdir(parents=True, exist_ok=True)
-    (target / f"{day.strip()}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return _redirect("/settings?ok=" + quote(f"{day.strip()} 자료를 저장했습니다. '지금 실행'으로 수집하세요."))
+    (target / f"{day}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return _settings_redirect("ok", f"{day} 자료를 저장했습니다. '지금 실행'으로 수집하세요.", "upload", day)
 
 
 @app.post("/settings/run")
@@ -417,7 +469,7 @@ def run_now(day: str = Form(...), user=Depends(require_user_csrf)):
     # 분석(향후 LLM 호출)이 오래 걸릴 수 있어 스레드풀에서 실행하며 자체 연결을 쓴다.
     day = day.strip()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
-        return _redirect("/settings?error=" + quote("날짜는 YYYY-MM-DD 형식으로 입력하세요."))
+        return _settings_redirect("error", "날짜는 YYYY-MM-DD 형식으로 입력하세요. (예: 2026-10-02)", "run", day)
     conn = _open()
     try:
         gcc, law, llm = adapters.from_settings(conn)
@@ -426,4 +478,4 @@ def run_now(day: str = Form(...), user=Depends(require_user_csrf)):
         conn.close()
     text = daily.format_result(result).replace("\n", " / ")
     failed = result["collection"].get("status") != "성공" or result.get("analysis_error")
-    return _redirect("/settings?" + ("error=" if failed else "ok=") + quote(text))
+    return _settings_redirect("error" if failed else "ok", text, "run", day)

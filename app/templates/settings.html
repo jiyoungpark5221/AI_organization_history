@@ -1,45 +1,63 @@
 {% extends "base.html" %}
+{% from "_ui.html" import can_do, error_box, loading, toasts %}
 {% block title %}설정{% endblock %}
 {% block content %}
+{#- 실패한 폼이 지정되면 그 카드 안에 사유와 다시 시도를 보여주고, 아니면 상단 알림으로 보여준다. -#}
+{% set ok_link = {'run': ('/', '목록에서 확인'), 'upload': ('#run', '지금 실행으로 이동')}.get(form) %}
+{{ toasts(ok=(ok ~ ' — 반영되었습니다.') if ok else None, error=error if (error and not form) else None, ok_link=ok_link) }}
 <h1>설정</h1>
-{% if error %}<div class="alert">⚠ {{ error }}</div>{% endif %}
-{% if ok %}<div class="alert ok">{{ ok }}</div>{% endif %}
+{{ can_do(
+  ['서버 스케줄러가 매일 지정 시각에 일일 작업(수집 → 변경 탐지 → 법령 확보·AI 분석)을 실행',
+   '같은 변경은 다시 수집돼도 검토 건을 중복 등록하지 않음'],
+  ['스케줄러 등록과 실제 연결정보(GCC·법제처·내부 LLM) 교체는 서버 관리자가 직접',
+   '수동 파일 입력·지금 실행은 연결 장애나 시험 운영 때만 사용'],
+  auto_title='자동으로 처리되는 일', human_title='사람이 직접 해야 하는 일') }}
 
-<form method="post" action="/settings" class="card">
+<form method="post" action="/settings" class="card" id="save-form" data-once>
   <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
   <h2 style="margin-top:0">수집 주기·연결정보</h2>
+  {% if error and form == 'save' %}{{ error_box(error, title='설정을 저장하지 못했습니다', retry_label='값을 고친 뒤 다시 저장', retry_form='save-form') }}{% endif %}
   <label for="schedule_time">수집 시각 (매일, HH:MM)</label>
-  <input type="text" id="schedule_time" name="schedule_time" value="{{ s.schedule_time }}">
-  <p class="muted">이 시각에 자동으로 실행되도록 서버의 스케줄러(cron, Windows 작업 스케줄러 등)에서
-    <code>python -m app.daily</code> 를 호출해 등록하세요. 이 값은 등록한 시각을 기록해 두는 용도이며 화면에서 스케줄러를 직접 만들지는 않습니다.</p>
+  <input type="text" id="schedule_time" name="schedule_time" value="{{ s.schedule_time }}" inputmode="numeric" placeholder="06:00">
+  <p class="help">서버 스케줄러(cron, Windows 작업 스케줄러 등)가 이 시각에 <code>python -m app.daily</code> 를 호출하도록 등록하세요.
+    이 값은 등록한 시각을 기록해 두는 용도이며, 화면에서 스케줄러를 직접 만들지는 않습니다.</p>
 
   <div class="alert warn" style="font-weight:400">연결 방식 확정 전 시험용 파일 입력입니다. GCC·법제처·내부 LLM의 실제 연결 방식이 확인되면 이 항목이 교체됩니다.</div>
   <label for="gcc_dir">GCC 자료 폴더 (날짜.json)</label>
   <input type="text" id="gcc_dir" name="gcc_dir" value="{{ s.gcc_dir }}">
+  <p class="help">일일 작업이 그날 날짜의 <code>YYYY-MM-DD.json</code> 을 읽어 직전 정상 수집본과 비교합니다.</p>
   <label for="law_dir">법령 자료 폴더 (기관코드.json)</label>
   <input type="text" id="law_dir" name="law_dir" value="{{ s.law_dir }}">
+  <p class="help">변경이 생긴 기관의 개편 전·후 직제·시행규칙 조항을 읽습니다. 없으면 검토 건이 ‘자료 부족’으로 표시됩니다.</p>
   <label for="llm_dir">AI 분석 예시 응답 폴더 (기관코드.json)</label>
   <input type="text" id="llm_dir" name="llm_dir" value="{{ s.llm_dir }}">
-  <div class="actions"><button class="primary" type="submit">저장</button></div>
+  <p class="help">내부 LLM 연결 전 시험용 고정 응답입니다. AI 결과는 항상 ‘후보’로만 저장되고 담당자 승인 전에는 확정되지 않습니다.</p>
+  <div class="actions"><button class="primary" type="submit" data-busy-text="저장 중…">저장</button></div>
 </form>
 
-<form method="post" action="/settings/upload-gcc" enctype="multipart/form-data" class="card">
+<form method="post" action="/settings/upload-gcc" enctype="multipart/form-data" class="card" id="upload-form" data-once>
   <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
   <h2 style="margin-top:0">수동 파일 입력 (보조 기능)</h2>
-  <p class="muted">연결 장애나 시험 운영 시 GCC 자료 파일을 직접 올립니다. 올린 파일은 GCC 자료 폴더에 <code>날짜.json</code> 으로 저장됩니다.</p>
+  <p class="help">연결 장애나 시험 운영 때 GCC 자료 파일을 직접 올립니다. 올린 파일은 GCC 자료 폴더에 <code>날짜.json</code> 으로 저장되며,
+    저장만 하고 수집은 하지 않습니다. 이어서 아래 ‘지금 실행’을 누르세요.</p>
+  {% if error and form == 'upload' %}{{ error_box(error, title='파일을 저장하지 못했습니다', retry_label='파일을 다시 선택해 올리기', retry_form='upload-form') }}{% endif %}
   <label for="up_day">기준일 (YYYY-MM-DD)</label>
-  <input type="text" id="up_day" name="day" placeholder="2026-10-02">
+  <input type="text" id="up_day" name="day" placeholder="2026-10-02" value="{{ day if form == 'upload' else '' }}">
   <label for="up_file">JSON 파일</label>
   <input type="file" id="up_file" name="file" accept=".json,application/json">
-  <div class="actions"><button type="submit">업로드</button></div>
+  <div class="actions"><button type="submit" data-busy-text="올리는 중…">업로드</button></div>
+  <div data-loading hidden>{{ loading('파일을 확인하고 저장하는 중입니다…') }}</div>
 </form>
 
-<form method="post" action="/settings/run" class="card">
+<form method="post" action="/settings/run" class="card" id="run" data-once>
   <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
   <h2 style="margin-top:0">지금 실행</h2>
-  <p class="muted">지정한 날짜의 자료로 수집 → 변경 탐지 → 법령 확보·분석을 한 번 실행합니다. 같은 날짜를 다시 실행해도 같은 변경은 중복 등록되지 않습니다.</p>
+  <p class="help">지정한 날짜의 자료로 수집 → 변경 탐지 → 법령 확보·분석을 한 번 실행합니다.
+    같은 날짜를 다시 실행해도 같은 변경은 중복 등록되지 않습니다. 실행이 끝나면 결과를 이 화면 위쪽에 알려드립니다.</p>
+  {% if error and form == 'run' %}{{ error_box(error, title='실행 중 문제가 있었습니다', retry_label='같은 날짜로 다시 실행', retry_form='run') }}{% endif %}
   <label for="run_day">기준일 (YYYY-MM-DD)</label>
-  <input type="text" id="run_day" name="day" placeholder="2026-10-02">
-  <div class="actions"><button type="submit">실행</button></div>
+  <input type="text" id="run_day" name="day" placeholder="2026-10-02" value="{{ day if form in ('run', 'upload') else '' }}">
+  <div class="actions"><button class="primary" type="submit" data-busy-text="실행 중…">실행</button></div>
+  <div data-loading hidden>{{ loading('수집과 분석을 실행하는 중입니다. 잠시 기다려 주세요…') }}</div>
 </form>
 {% endblock %}

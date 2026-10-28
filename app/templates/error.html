@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "_ui.html" import error_box %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+{{ error_box(reason, retry_href=retry_href, retry_label=retry_label, title=box_title) }}
+<p class="help">{{ detail }}</p>
+<div class="actions">
+  <a class="btn" href="/">변경·승인 목록으로</a>
+  {% if not request.state.user %}<a class="btn" href="/login">로그인 화면으로</a>{% endif %}
+</div>
+{% endblock %}

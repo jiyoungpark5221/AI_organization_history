@@ -1,0 +1,91 @@
+{#- 공통 UI 매크로. 사용법은 base.html 맨 위 주석 참고. 출력만 하며 데이터를 바꾸지 않는다. -#}
+
+{% macro badge(kind, text=None) -%}
+{%- set m = {
+  'src': ('◇', '원천 기재'), 'ai': ('◌', 'AI 제안(후보)'), 'appr': ('✔', '승인 결과'),
+  'unk': ('?', '미확인'), 'lack': ('!', '자료 부족'), 'conflict': ('⇄', '원천 충돌'), 'fail': ('✕', '실패')
+} -%}
+{%- set icon, label = m.get(kind, ('•', kind)) -%}
+<span class="badge {{ kind }}"><span class="badge-icon" aria-hidden="true">{{ icon }}</span>{{ text or label }}</span>
+{%- endmacro %}
+
+{% macro steps(states, notes=None, label='처리 단계') -%}
+{%- set names = ['변경 탐지', 'AI 분석', '담당자 검토', '확정 저장'] -%}
+{%- set words = {'done': '완료', 'current': '진행 중', 'todo': '대기', 'warn': '확인 필요', 'error': '실패'} -%}
+{%- set icons = {'done': '✓', 'current': '●', 'todo': '○', 'warn': '!', 'error': '✕'} -%}
+<ol class="steps" aria-label="{{ label }}">
+  {%- for n in names %}
+  {%- set st = states[loop.index0] if states|length > loop.index0 and states[loop.index0] in words else 'todo' %}
+  <li class="step {{ st }}"{% if st == 'current' %} aria-current="step"{% endif %}>
+    <span class="step-icon" aria-hidden="true">{{ icons[st] }}</span>
+    <span class="step-name">{{ loop.index }}. {{ n }}</span>
+    <span class="step-state">{{ words[st] }}{% if notes and notes|length > loop.index0 and notes[loop.index0] %} · {{ notes[loop.index0] }}{% endif %}</span>
+  </li>
+  {%- endfor %}
+</ol>
+{%- endmacro %}
+
+{% macro can_do(auto, human, auto_title='시스템이 자동으로 하는 것', human_title='담당자 승인이 필요한 것') -%}
+<div class="can-do">
+  <div class="auto">
+    <h3><span aria-hidden="true">⚙</span>{{ auto_title }}</h3>
+    <ul>{% for item in auto %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+  <div class="human">
+    <h3><span aria-hidden="true">✔</span>{{ human_title }}</h3>
+    <ul>{% for item in human %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro empty_state(title, reason, actions=[]) -%}
+<section class="empty-state" aria-label="{{ title }}">
+  <div class="empty-icon" aria-hidden="true">∅</div>
+  <h2>{{ title }}</h2>
+  <p>{{ reason }}</p>
+  {%- if actions %}
+  <div class="actions">
+    {%- for a in actions %}<a class="btn{{ ' primary' if a.primary }}" href="{{ a.href }}">{{ a.label }}</a>{% endfor %}
+  </div>
+  {%- endif %}
+</section>
+{%- endmacro %}
+
+{% macro error_box(reason, retry_href=None, retry_form=None, retry_label='다시 시도', title='처리하지 못했습니다') -%}
+<div class="error-box" role="alert">
+  <h3><span aria-hidden="true">✕</span>{{ title }}</h3>
+  <p>{{ reason }}</p>
+  <div class="actions">
+    {%- if retry_href %}<a class="btn primary" href="{{ retry_href }}">{{ retry_label }}</a>
+    {%- elif retry_form %}<button type="button" class="primary" data-retry-form="{{ retry_form }}">{{ retry_label }}</button>
+    {%- else %}<button type="button" class="primary" data-retry>{{ retry_label }}</button>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro loading(text='불러오는 중…') -%}
+<div class="loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>{{ text }}</span></div>
+{%- endmacro %}
+
+{% macro skeleton(lines=3) -%}
+<div class="skeleton" aria-hidden="true">{% for _ in range(lines) %}<span></span>{% endfor %}</div>
+{%- endmacro %}
+
+{% macro toasts(ok=None, error=None, ok_link=None) -%}
+<div class="toast-region" aria-live="polite">
+  {%- if error %}
+  <div class="toast error" role="alert">
+    <span class="toast-icon" aria-hidden="true">✕</span>
+    <div class="toast-body"><strong class="sr-only">오류: </strong>{{ error }}</div>
+    <button type="button" class="toast-close" data-dismiss aria-label="알림 닫기">×</button>
+  </div>
+  {%- endif %}
+  {%- if ok %}
+  <div class="toast ok" role="status">
+    <span class="toast-icon" aria-hidden="true">✓</span>
+    <div class="toast-body">{{ ok }}{% if ok_link %} — <a href="{{ ok_link[0] }}">{{ ok_link[1] }}</a>{% endif %}</div>
+    <button type="button" class="toast-close" data-dismiss aria-label="알림 닫기">×</button>
+  </div>
+  {%- endif %}
+</div>
+{%- endmacro %}

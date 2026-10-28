@@ -1,17 +1,27 @@
 {% extends "base.html" %}
+{% from "_ui.html" import can_do %}
 {% block title %}로그인{% endblock %}
 {% block content %}
 <h1>로그인</h1>
-{% if error %}<div class="alert">⚠ {{ error }}</div>{% endif %}
-<form method="post" action="/login" class="card" style="max-width:420px">
+{% if reason == 'expired' %}
+<div class="alert warn" role="status">로그인이 만료되었거나 계정 상태가 바뀌어 로그아웃되었습니다. 다시 로그인해 주세요.</div>
+{% elif next_url and next_url != '/' and not error %}
+<div class="alert info" role="status">요청한 화면은 로그인한 담당자만 볼 수 있습니다. 로그인하면 그 화면으로 바로 이동합니다.</div>
+{% endif %}
+{% if error %}<div role="alert" class="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/login" class="card" style="max-width:440px" data-once>
   <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
   <input type="hidden" name="next" value="{{ next_url }}">
   <label for="login_id">로그인 ID</label>
   <input type="text" id="login_id" name="login_id" autocomplete="username" required autofocus>
   <label for="password">비밀번호</label>
-  <input type="password" id="password" name="password" autocomplete="current-password" required
-         style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text);font:inherit">
-  <div class="actions"><button class="primary" type="submit">로그인</button></div>
-  <p class="muted">계정은 서버 관리자가 <code>python -m app.users create</code> 로 만듭니다.</p>
+  <input type="password" id="password" name="password" autocomplete="current-password" required>
+  <div class="actions"><button class="primary" type="submit" data-busy-text="로그인 중…">로그인</button></div>
+  <p class="help">계정이 없나요? 계정은 관리자에게 요청하세요.
+    (관리자는 서버에서 <code>python -m app.users create &lt;로그인ID&gt; &lt;표시이름&gt;</code> 로 만듭니다.)</p>
 </form>
+{{ can_do(
+  ['매일 GCC 기관코드 수집과 변경 탐지', '관련 직제·시행규칙 확보와 AI 분석 후보 작성', '근거(법령·조항) 연결'],
+  ['AI 후보의 근거 확인과 승인·수정·보류·기각', '확정 데이터 정정', '처리 기록은 로그인한 계정으로 자동 저장됩니다'],
+  auto_title='로그인 후 시스템이 해 두는 일', human_title='담당자가 판단하는 일') }}
 {% endblock %}
