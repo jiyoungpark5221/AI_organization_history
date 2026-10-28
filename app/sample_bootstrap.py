@@ -11,6 +11,8 @@ from . import adapters, auth, daily
 from .db import ROOT
 
 SAMPLE_DAYS = ("2026-10-01", "2026-10-02", "2026-10-03")
+SAMPLE_DEFAULT_LOGIN = "admin"
+SAMPLE_DEFAULT_PASSWORD = "11111111"
 
 
 def enabled() -> bool:
@@ -32,6 +34,9 @@ def bootstrap(conn) -> dict:
             result["collections"] += 1
     login_id = os.environ.get("SAMPLE_LOGIN_ID")
     password = os.environ.get("SAMPLE_PASSWORD")
+    if not login_id and not password and os.environ.get("VERCEL"):
+        # 샘플 배포 전용 기본 계정(공개 저장소에 노출되는 값이므로 실제 자료를 연결하기 전에 환경변수로 바꿔야 한다).
+        login_id, password = SAMPLE_DEFAULT_LOGIN, SAMPLE_DEFAULT_PASSWORD
     if login_id and password:
         exists = conn.execute("SELECT 1 FROM app_user WHERE login_id=?", (login_id,)).fetchone()
         if not exists:

@@ -63,3 +63,25 @@ def test_db_path_uses_tmp_on_vercel(monkeypatch):
     assert db.db_path() == "/tmp/app.db"
     monkeypatch.setenv("APP_DB", "x.db")
     assert db.db_path() == "x.db"
+
+
+def test_default_admin_only_on_vercel_without_env(conn, monkeypatch):
+    # 로컬(APP_SAMPLE_BOOTSTRAP)에서는 기본 계정을 만들지 않는다
+    monkeypatch.setenv("APP_SAMPLE_BOOTSTRAP", "1")
+    sample_bootstrap.bootstrap(conn)
+    assert _count(conn, "app_user") == 0
+    # Vercel 이고 환경변수가 없으면 기본 샘플 계정
+    monkeypatch.delenv("APP_SAMPLE_BOOTSTRAP")
+    monkeypatch.setenv("VERCEL", "1")
+    assert sample_bootstrap.bootstrap(conn)["user_created"] is True
+    from app import auth
+    assert auth.DbAuthProvider().authenticate(conn, "admin", "11111111") is not None
+
+
+def test_env_overrides_default_on_vercel(conn, monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("SAMPLE_LOGIN_ID", "custom")
+    monkeypatch.setenv("SAMPLE_PASSWORD", "custom-password-1")
+    sample_bootstrap.bootstrap(conn)
+    logins = [r["login_id"] for r in conn.execute("SELECT login_id FROM app_user")]
+    assert logins == ["custom"]

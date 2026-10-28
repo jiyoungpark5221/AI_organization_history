@@ -119,7 +119,8 @@ $env:APP_DB = "data/demo.db"
 
 - 진입점은 `pyproject.toml` 의 `[tool.vercel] entrypoint = "app.web:app"` 이다.
 - Vercel 은 디스크가 영구 보존되지 않아 DB 를 `/tmp` 에 두고, 비어 있으면 `sample_data/` 의 가상 예시 자료로 일일 작업을 돌려 검토 건을 채운다(`app/sample_bootstrap.py`).
-- **로그인 계정은 환경변수로 만든다.** Vercel 프로젝트의 Environment Variables 에 다음을 설정해야 로그인할 수 있다(비밀번호는 저장소에 두지 않는다).
+- **기본 샘플 계정:** Vercel 에서 환경변수를 설정하지 않으면 `admin` / `11111111` 계정이 만들어진다. 이 값은 저장소에 공개되므로 샘플 확인용으로만 쓰고, 실제 자료를 연결하기 전에는 반드시 아래 환경변수로 바꾼다. 내 PC에서 실행할 때는 기본 계정이 만들어지지 않는다.
+- **로그인 계정을 직접 정하려면** Vercel 프로젝트의 Environment Variables 에 다음을 설정한다(환경변수가 있으면 기본 계정 대신 이 값이 쓰인다).
 
   | 변수 | 설명 |
   |---|---|
