@@ -281,19 +281,153 @@ def test_search_by_name_code_common_id_and_limit(env):
     assert "검색기관03" in frag(c, cid, org=target)
 
 
-# ---------------------------------------------------------------- 9. 노드 12개 제한
-def test_node_limit_12(env):
+# ---------------------------------------------------------------- 9. 노드 16개 제한
+def test_node_limit_16(env):
+    c, conn, ids = env
+    assert lineage.MAX_NODES == 16
+    root = org(conn, "중심 기관", "R0")
+    for i in range(20):
+        o = org(conn, f"상대기관{i:02d}", f"C{i:02d}")
+        confirmed_rel(conn, o, root, ids["hong"])
+    cid = make_case(conn, "R0")
+    html = frag(c, cid)
+    assert len(re.findall(r'<g class="node ', html)) == 16
+    assert "일부만 표시" in html
+    g = lineage.build(conn, org_id=root)
+    assert len(g["nodes"]) == 16 and g["truncated"] and g["omitted"] == 5
+
+
+def test_node_limit_not_truncated_at_exactly_16(env):
     c, conn, ids = env
     root = org(conn, "중심 기관", "R0")
     for i in range(15):
         o = org(conn, f"상대기관{i:02d}", f"C{i:02d}")
         confirmed_rel(conn, o, root, ids["hong"])
-    cid = make_case(conn, "R0")
-    html = frag(c, cid)
-    assert len(re.findall(r'<g class="node ', html)) == 12
-    assert "일부만 표시" in html
     g = lineage.build(conn, org_id=root)
-    assert len(g["nodes"]) == 12 and g["truncated"] and g["omitted"] == 4
+    assert len(g["nodes"]) == 16 and not g["truncated"]
+
+
+# ---------------------------------------------------------------- 두 줄 구조 (기관 단위 줄 + 하위 조직 줄)
+def ref_record_parent(conn, sid, oid, parent="0000000"):
+    conn.execute("INSERT INTO ref_org_record(source_row_id,import_id,org_id,source_system,source_code,parent_code) "
+                 "VALUES(?,?,?, 'GCC', ?, ?)", (sid, import_id(conn), oid, "C" + sid, parent))
+
+
+def ref_record_cams(conn, sid, oid):
+    conn.execute("INSERT INTO ref_org_record(source_row_id,import_id,org_id,source_system,source_code,source_start,source_end) "
+                 "VALUES(?,?,?, 'CAMS_OG', NULL, '1993-10-15', '1994-12-23')", (sid, import_id(conn), oid))
+
+
+def two_level_fixture(conn):
+    """환경청 <- 환경처 <- 환경부 (+후신 기후에너지환경부), 환경부 > 자연보전국 > 자연정책과 <- 환경처 자연정책과(소속 자료 없음)."""
+    o = {}
+    o["청"] = org(conn, "환경청", "1790279", "ENV-ORG-01533")
+    o["처"] = org(conn, "환경처", "1790268", "ENV-ORG-01532")
+    o["부"] = org(conn, "환경부", "1480000", "ENV-ORG-00361")
+    o["기후"] = org(conn, "기후에너지환경부", "1482000", "ENV-ORG-00001")
+    o["국"] = org(conn, "환경부 자연보전국", "1480038", "ENV-ORG-01216")
+    o["과"] = org(conn, "환경부 자연보전국 자연정책과", "1480041", "ENV-ORG-01238")
+    o["생태"] = org(conn, "환경부 자연보전국 자연생태정책과", "1480898", "ENV-ORG-01235")
+    o["옛과"] = org(conn, "환경처 자연보전국 자연정책과", None, "ENV-ORG-01557")
+    parent_code = {"청": "0000000", "처": "0000000", "부": "0000000", "기후": "0000000",
+                   "국": "1480000", "과": "1480038", "생태": "1480038"}
+    for i, (name, pc) in enumerate(parent_code.items()):
+        ref_record_parent(conn, f"G{i}", o[name], pc)
+    # GCC 상위기관 링크(from=하위, to=상위)
+    ref_rel(conn, "P1", "GCC_PARENT_LINK", o["과"], o["국"])
+    ref_rel(conn, "P2", "GCC_PARENT_LINK", o["국"], o["부"])
+    ref_rel(conn, "P3", "GCC_PARENT_LINK", o["생태"], o["국"])
+    # 승계 관계(원천 파일: from=후속, to=이전). R4 는 먼저 만나는 짧은 링크(충돌 검토 상태)
+    ref_rel(conn, "R1", "SUCCEEDS", o["처"], o["청"], layer="CANONICAL_RELATION", status="CONFIRMED_CROSS_SOURCE")
+    ref_rel(conn, "R2", "SUCCEEDS", o["부"], o["처"], layer="CANONICAL_RELATION", status="CONFIRMED_CROSS_SOURCE")
+    ref_rel(conn, "R3", "SUCCEEDS", o["기후"], o["부"], layer="CANONICAL_RELATION", status="NEEDS_REVIEW")
+    ref_rel(conn, "R0", "GCC_PREVIOUS_CODE_LINK", o["부"], o["청"], status="CONFLICT_REVIEW")
+    ref_rel(conn, "R5", "SUCCEEDS", o["생태"], o["과"], layer="CANONICAL_RELATION", status="GCC_CONFIRMED_OG_NOT_FOUND")
+    ref_rel(conn, "R6", "SUCCEEDS", o["과"], o["옛과"], layer="CANONICAL_RELATION", status="CONFIRMED_OG_RELATION")
+    ref_record_cams(conn, "CAMS1", o["옛과"])
+    return o
+
+
+def test_two_rows_top_institution_mid_and_lower_unit(env):
+    c, conn, _ = env
+    o = two_level_fixture(conn)
+    g = lineage.build(conn, org_id=o["과"])
+    by = {n["name"]: n for n in g["nodes"]}
+    assert g["rows"] == ["top", "mid", ""]
+    for name in ("환경부", "환경처", "환경청", "기후에너지환경부"):
+        assert by[name]["band"] == "top"
+    assert by["환경부 자연보전국"]["band"] == "mid"
+    for name in ("환경부 자연보전국 자연정책과", "환경부 자연보전국 자연생태정책과", "환경처 자연보전국 자연정책과"):
+        assert by[name]["band"] == ""
+    cid = make_case(conn, "NOPE")
+    html = frag(c, cid, org=o["과"])
+    assert 'data-row="top"' in html and 'data-row="mid"' in html and 'data-row="main"' in html
+    assert "기관 단위 계보" in html and "하위 조직 계보" in html
+
+
+def test_canonical_followed_with_direction_and_predecessor_left_of_successor(env):
+    c, conn, _ = env
+    o = two_level_fixture(conn)
+    g = lineage.build(conn, org_id=o["과"])
+    lvl = {n["name"]: n["level"] for n in g["nodes"]}
+    # 원천 파일 from=후속: 환경부(후속) -> 환경처(이전) -> 환경청(더 이전), 기후에너지환경부는 환경부의 후속
+    assert lvl["환경청"] < lvl["환경처"] < lvl["환경부"] < lvl["기후에너지환경부"]
+    # 짧은 링크(환경부->환경청, CONFLICT_REVIEW)가 먼저 만나도 환경청이 환경처와 같은 열이 되지 않는다
+    assert lvl["환경청"] != lvl["환경처"]
+    # 하위 조직 줄: 환경처 자연정책과(이전) < 자연정책과 < 자연생태정책과(후속)
+    assert lvl["환경처 자연보전국 자연정책과"] < lvl["환경부 자연보전국 자연정책과"] < lvl["환경부 자연보전국 자연생태정책과"]
+    # 상위기관(국, 부)은 선택 기관과 같은 열: 소속 관계는 위아래로 이어진다
+    assert lvl["환경부 자연보전국"] == lvl["환경부"] == lvl["환경부 자연보전국 자연정책과"] == 0
+    cid = make_case(conn, "NOPE")
+    html = frag(c, cid, org=o["과"])
+    assert "원천 파일의 검토 상태: CONFIRMED_CROSS_SOURCE (우리 시스템 승인 아님)" in html
+    assert "원천 파일의 상태: CONFLICT_REVIEW" in html
+    assert arrows(html) == 0
+    assert "업무 승계는 확인되지 않음(연결자료 부족)" in html
+
+
+def test_unlinked_node_marked_and_not_connected(env):
+    c, conn, _ = env
+    o = two_level_fixture(conn)
+    g = lineage.build(conn, org_id=o["과"])
+    by = {n["name"]: n for n in g["nodes"]}
+    old = by["환경처 자연보전국 자연정책과"]
+    assert "소속 연결 미확인" in old["unlinked"]
+    # 소속 선(parent)이 이 노드로 이어지지 않는다
+    assert not [e for e in g["edges"] if e["kind"] == "parent" and old["key"] in (e["start"], e["end"])]
+    # 최상위 기관(상위기관 코드 없음)과 소속이 이어진 기관은 '미확인'으로 표시하지 않는다
+    for name in ("환경부", "환경처", "환경청", "환경부 자연보전국", "환경부 자연보전국 자연정책과"):
+        assert by[name]["unlinked"] == "", name
+    cid = make_case(conn, "NOPE")
+    html = frag(c, cid, org=o["과"])
+    assert "소속 연결 미확인" in html and "선으로 잇지 않았습니다" in html
+
+
+def test_root_without_parent_data_shows_single_row_and_notice(env):
+    c, conn, _ = env
+    a = org(conn, "소속자료 없는 과", "X1")
+    b = org(conn, "후속 과", "X2")
+    ref_rel(conn, "R1", "SUCCEEDS", b, a, layer="CANONICAL_RELATION", status="NEEDS_REVIEW")
+    cid = make_case(conn, "X1")
+    g = lineage.build(conn, org_id=a)
+    assert g["rows"] == [""]
+    assert any("소속(상위기관) 자료가 없어" in t for _, t in g["notices"])
+    html = frag(c, cid, org=a)
+    assert "소속 연결 미확인" in html and 'data-row="top"' not in html
+
+
+def test_arrows_only_for_confirmed_task_move_in_both_rows(env):
+    c, conn, ids = env
+    o = two_level_fixture(conn)
+    cid = make_case(conn, "NOPE")
+    cand_move(conn, cid, "1790268", "1480000")      # 검토 후보: 화살표 없음
+    assert arrows(frag(c, cid, org=o["과"])) == 0
+    confirmed_move(conn, o["처"], o["부"], ids["hong"], dstat="미확인", date=None)    # 기관 단위 승인
+    confirmed_move(conn, o["과"], o["생태"], ids["hong"], dstat="미확인", date=None)  # 하위 조직 승인
+    html = frag(c, cid, org=o["과"])
+    assert arrows(html) == 2
+    assert "업무 승계는 확인되지 않음" not in html
+    assert "적용일: 미확인" in html
 
 
 # ---------------------------------------------------------------- 10. 실제 엑셀
@@ -315,6 +449,33 @@ def test_real_excel_nature_policy_lineage(env):
     assert "업무 승계는 확인되지 않음(연결자료 부족)" in html
     assert "우리 시스템 승인 아님" in html                              # 원천 파일의 Canonical 표기
     assert "OG 전거ID: 미확보" in html
-    assert "일부만 표시" not in html or lineage.MAX_NODES == 12
+    assert "일부만 표시" not in html or lineage.MAX_NODES == 16
     # 검색으로도 찾을 수 있다
     assert "자연정책과" in frag(c, cid, q="ENV-ORG-01238")
+
+
+@pytest.mark.skipif(not XLSX.exists(), reason="환경부 엑셀 파일이 폴더에 없음")
+def test_real_excel_two_rows_connection_range(env):
+    """엑셀에서 실제로 확인되는 연결 범위만 그린다: 소속은 자연정책과>자연보전국>환경부까지, 환경처 시절 과는 끊김."""
+    from app import import_xlsx
+
+    c, conn, _ = env
+    import_xlsx.run_import(conn, XLSX)
+    oid = conn.execute("SELECT org_id FROM org_identifier WHERE id_type='COMMON' AND id_value='ENV-ORG-01238'").fetchone()[0]
+    g = lineage.build(conn, org_id=oid)
+    by = {n["name"]: n for n in g["nodes"]}
+    assert g["rows"] == ["top", "mid", ""] and not g["truncated"]
+    for name in ("환경청", "환경처", "환경부", "기후에너지환경부"):
+        assert by[name]["band"] == "top", name
+    assert by["환경부 자연보전국"]["band"] == "mid"
+    assert by["환경청"]["level"] < by["환경처"]["level"] < by["환경부"]["level"] < by["기후에너지환경부"]["level"]
+    old = by["환경처 자연보전국 자연정책과"]
+    assert old["band"] == "" and "소속 연결 미확인" in old["unlinked"]
+    assert not [e for e in g["edges"] if e["kind"] == "parent" and old["key"] in (e["start"], e["end"])]
+    assert not g["has_arrow"]
+    cid = make_case(conn, "NOPE-CODE")
+    before = tables_count(conn)
+    html = frag(c, cid, org=oid)
+    assert tables_count(conn) == before
+    assert arrows(html) == 0 and "소속 연결 미확인" in html
+    assert "원천 관측기간(관계·업무 유효기간 아님)" in html

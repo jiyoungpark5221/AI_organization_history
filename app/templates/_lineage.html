@@ -42,12 +42,19 @@
 
     <div class="lin-svgwrap">
     <svg class="lin-svg" viewBox="0 0 {{ g.layout.width }} {{ g.layout.height }}" role="img"
+         style="min-width:{{ [ (g.layout.width * 0.7)|int, 640 ]|max }}px"
          aria-label="기능 담당 조직 계보도" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="lin-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
         </marker>
       </defs>
+      {% for r in g.layout.rows %}
+        <g class="lin-row" data-row="{{ r.key or 'main' }}">
+          <rect x="6" y="{{ r.y }}" width="{{ g.layout.width - 12 }}" height="{{ r.h }}" rx="10"/>
+          <text x="18" y="{{ r.y + 20 }}">{{ r.label }}</text>
+        </g>
+      {% endfor %}
       {% for e in g.edges %}
         <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" class="e-{{ e.style }}"
               {% if e.arrow %}data-arrow="1" marker-end="url(#lin-arrow)"{% endif %}/>
@@ -80,10 +87,12 @@
       {% for n in g.nodes %}
       <section class="lin-node {{ 'n-appr' if '승인 결과' in n.layers else ('n-cand' if '검토 후보' in n.layers else 'n-src') }}">
         <h4>{{ n.name }}{% if n.key == g.root %} <span class="badge">선택 기관</span>{% endif %}
-          {% if n.band %}<span class="badge">상위기관</span>{% endif %}
+          {% if n.band == 'top' %}<span class="badge">최상위 소속 기관 (기관 단위 줄)</span>{% endif %}
+          {% if n.band == 'mid' %}<span class="badge">중간 소속 기관</span>{% endif %}
           {% for L in n.layers %}<span class="badge">{{ L }}</span>{% endfor %}</h4>
         <p class="muted">GCC 코드 {{ n.gcc|join(', ') or '없음' }} · 공통기관ID {{ n.common or '없음' }} ·
           OG 전거ID {{ n.og|join(', ') if n.og else '미확보' }}</p>
+        {% if n.unlinked %}<p class="unk-text"><span class="badge warn">소속 연결 미확인</span> {{ n.unlinked }} 선으로 잇지 않았습니다.</p>{% endif %}
         {% if n.approved_info %}<p><span class="badge ok">승인 결과</span> 기관정보 승인: {{ n.approved_info.name }}
           ({{ n.approved_info.by }}, {{ n.approved_info.at }}) · 기간 {{ n.approved_info.period }}</p>{% endif %}
         {% if n.records %}
