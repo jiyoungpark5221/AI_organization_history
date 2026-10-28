@@ -1,0 +1,135 @@
+{# 기능 담당 조직 계보도 조각(읽기 전용). /cases/{id}/lineage 가 반환하며 상세 화면의 펼침 패널에 삽입된다. #}
+<div class="lin">
+  <form class="search" data-lineage-form action="/cases/{{ case.case_id }}/lineage" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="기관명 · GCC 코드 · 공통기관ID로 검색" aria-label="기관 검색">
+    <button type="submit">기관 검색</button>
+    {% if selected_org %}<input type="hidden" name="org" value="{{ selected_org }}">{% endif %}
+  </form>
+
+  {% if results is not none %}
+  <div class="lin-results">
+    {% if results %}
+      <p class="muted">검색 결과 {{ results|length }}건 (최대 20건) — 기관을 선택하세요.</p>
+      <ul>
+      {% for r in results %}
+        <li><a href="#" data-lineage-url="/cases/{{ case.case_id }}/lineage?org={{ r.org_id }}">{{ r.name }}</a>
+          <span class="muted">GCC {{ r.gcc|join(', ') or '없음' }}{% if r.common %} · {{ r.common }}{% endif %}</span></li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">검색 결과가 없습니다.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="lin-legend" aria-label="범례">
+    <strong>범례</strong>
+    <span class="lg"><svg width="46" height="12" aria-hidden="true"><line x1="2" y1="6" x2="44" y2="6" class="e-src"/></svg> 원천 기재 (엑셀 가져오기 · 우리 승인 아님)</span>
+    <span class="lg"><svg width="46" height="12" aria-hidden="true"><line x1="2" y1="6" x2="44" y2="6" class="e-cand"/></svg> 검토 후보 (AI 제안 · 미확정)</span>
+    <span class="lg"><svg width="46" height="12" aria-hidden="true"><line x1="2" y1="6" x2="44" y2="6" class="e-appr"/></svg> 승인 결과 (우리 시스템 승인)</span>
+    <span class="lg">▶ 화살표 = 승인된 업무 이동만 · 선(화살표 없음) = 기관관계</span>
+  </div>
+
+  {% if not g.root %}
+    <div class="alert info">
+      {% if selected_org %}선택한 기관을 찾을 수 없습니다.
+      {% else %}이 건의 기관이 가져온 기관 자료에 없습니다. 위에서 기관을 검색해 선택하세요.{% endif %}
+    </div>
+  {% else %}
+    {% for kind, text in g.notices %}<div class="alert {{ kind }}">{{ text }}</div>{% endfor %}
+    <p class="muted">기관 {{ g.nodes|length }}개 · 선 {{ g.edges|length }}개 · 업무 이동 화살표 {{ g.edges|selectattr('arrow')|list|length }}개.
+      날짜가 없거나 확인되지 않은 값은 모두 '미확인'으로 표시하며 추정하지 않습니다.</p>
+
+    <div class="lin-svgwrap">
+    <svg class="lin-svg" viewBox="0 0 {{ g.layout.width }} {{ g.layout.height }}" role="img"
+         aria-label="기능 담당 조직 계보도" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="lin-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+        </marker>
+      </defs>
+      {% for e in g.edges %}
+        <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" class="e-{{ e.style }}"
+              {% if e.arrow %}data-arrow="1" marker-end="url(#lin-arrow)"{% endif %}/>
+      {% endfor %}
+      {% for e in g.edges %}
+        <g class="elabel">
+          {% set lw = 124 %}
+          <rect x="{{ e.lx - (lw/2 if e.anchor == 'middle' else 0) }}" y="{{ e.ly - 14 }}" width="{{ lw }}" height="{{ e.label_lines|length * 16 + 6 }}" rx="4" class="lbl-bg"/>
+          {% for t in e.label_lines %}
+            <text x="{{ e.lx + (0 if e.anchor == 'middle' else lw/2) }}" y="{{ e.ly + loop.index0 * 16 }}" text-anchor="middle" class="lbl-text">{{ t }}</text>
+          {% endfor %}
+        </g>
+      {% endfor %}
+      {% for n in g.nodes %}
+        {% set strong = '승인 결과' in n.layers %}
+        {% set cand = '검토 후보' in n.layers %}
+        <g class="node {{ 'n-appr' if strong else ('n-cand' if cand else 'n-src') }}{{ ' n-root' if n.key == g.root }}">
+          <rect x="{{ n.x }}" y="{{ n.y }}" width="{{ n.w }}" height="{{ n.h }}" rx="8"/>
+          {% for t, st in n.lines %}
+            <text x="{{ n.x + 12 }}" y="{{ n.y + 10 + loop.index * 20 - 5 }}" class="t-{{ st }}">{{ t }}</text>
+          {% endfor %}
+        </g>
+      {% endfor %}
+    </svg>
+    </div>
+
+    {# 글로 보기: 모바일에서는 이 목록만 보이고, 접근성(스크린리더·복사)용으로 항상 제공한다. #}
+    <div class="lin-list">
+      <h3>기관 목록</h3>
+      {% for n in g.nodes %}
+      <section class="lin-node {{ 'n-appr' if '승인 결과' in n.layers else ('n-cand' if '검토 후보' in n.layers else 'n-src') }}">
+        <h4>{{ n.name }}{% if n.key == g.root %} <span class="badge">선택 기관</span>{% endif %}
+          {% if n.band %}<span class="badge">상위기관</span>{% endif %}
+          {% for L in n.layers %}<span class="badge">{{ L }}</span>{% endfor %}</h4>
+        <p class="muted">GCC 코드 {{ n.gcc|join(', ') or '없음' }} · 공통기관ID {{ n.common or '없음' }} ·
+          OG 전거ID {{ n.og|join(', ') if n.og else '미확보' }}</p>
+        {% if n.approved_info %}<p><span class="badge ok">승인 결과</span> 기관정보 승인: {{ n.approved_info.name }}
+          ({{ n.approved_info.by }}, {{ n.approved_info.at }}) · 기간 {{ n.approved_info.period }}</p>{% endif %}
+        {% if n.records %}
+        <p class="muted">원천 관측기간(기관 생성·폐지일 — 관계·업무 유효기간 아님):
+          {% for r in n.records %}{{ r.system }} {{ r.code or '코드없음' }} {{ r.period }}{{ '; ' if not loop.last }}{% endfor %}</p>
+        {% endif %}
+        {% if n.works %}
+        <p><strong>담당 업무</strong> <span class="badge">원천 기재</span> <span class="badge warn">업무 승계 미확인</span></p>
+        <ul>
+          {% for w in n.works[:5] %}
+          <li>{{ w.text }} <span class="muted">(OG PDF {{ w.source_page or '쪽 미확인' }}쪽 {{ w.seq or '순번 미확인' }}번 ·
+            OG_CODE 원문 {{ w.og_raw or '없음' }} · 업무 유효기간 {{ w.period }})</span></li>
+          {% endfor %}
+        </ul>
+        {% if n.work_total > 5 %}<p class="muted">외 {{ n.work_total - 5 }}건</p>{% endif %}
+        {% endif %}
+        {% if n.cand_moves %}
+        <p><strong>후보(미확정) 업무 승계</strong> <span class="badge">검토 후보</span></p>
+        <ul>{% for c in n.cand_moves %}<li>{{ c }}</li>{% endfor %}</ul>
+        {% endif %}
+        {% for note in n.notes %}<p class="muted">{{ note }}</p>{% endfor %}
+      </section>
+      {% endfor %}
+
+      <h3>연결 목록</h3>
+      {% if g.edges %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>구분</th><th>연결</th><th>종류</th><th>상태·날짜</th></tr></thead>
+        <tbody>
+        {% set names = {} %}
+        {% for n in g.nodes %}{% set _ = names.update({n.key|string: n.name}) %}{% endfor %}
+        {% for e in g.edges %}
+        <tr>
+          <td><span class="badge {{ 'ok' if e.layer == '승인 결과' }}">{{ e.layer }}</span>
+              {% if e.arrow %}<span class="badge ok">업무 승계 ▶</span>{% else %}<span class="badge">기관관계 (화살표 없음)</span>{% endif %}</td>
+          <td>{{ names[e.start|string] }} {{ '▶' if e.arrow else '—' }} {{ names[e.end|string] }}</td>
+          <td>{{ e.label }}{% if e.evidence %}<div class="muted">{{ e.evidence }}</div>{% endif %}</td>
+          <td>{{ e.status }}<div class="muted">{{ e.valid }}</div>{% if e.observed %}<div class="muted">{{ e.observed }}</div>{% endif %}
+              <div class="muted">{{ e.ref_id }}</div></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+      <p class="muted">표시할 기관 간 연결이 없습니다.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

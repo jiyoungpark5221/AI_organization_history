@@ -1,0 +1,23 @@
+{
+  "description": "예시 데이터(가상). 실제 법령·기관과 무관하며 실제 원천 응답 형식이 아니다. LLM 고정 응답.",
+  "summary": "가상통계원이 가상통계센터로 명칭 변경",
+  "relations": [
+    {
+      "from_code": "G3000",
+      "to_code": "G3000",
+      "relation_type": "명칭 변경",
+      "valid_from": "2026-10-02",
+      "valid_to": null,
+      "date_status": "확인",
+      "evidence": [
+        {
+          "role": "개편 후",
+          "article_ref": "제1조",
+          "excerpt": "가상통계센터는 통계 생산과 관리에 관한 사무를 맡는다.",
+          "reason": "개편 후 명칭"
+        }
+      ]
+    }
+  ],
+  "task_moves": []
+}

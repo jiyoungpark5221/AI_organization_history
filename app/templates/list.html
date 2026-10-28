@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}변경·승인 목록{% endblock %}
+{% block content %}
+<h1>변경·승인 목록</h1>
+
+{% for a in alerts %}<div class="alert">⚠ {{ a }}</div>{% endfor %}
+
+<div class="card grid">
+  <div class="stat"><div class="label">마지막 수집 시각</div>
+    <div class="value">{{ last.started_at if last else '수집 기록 없음' }}</div></div>
+  <div class="stat"><div class="label">수집 상태</div>
+    <div class="value">{% if last %}{{ last.status }}{% if last.is_baseline %} (기준본){% endif %}{% else %}-{% endif %}</div></div>
+  <div class="stat"><div class="label">분석 상태</div>
+    <div class="value">실패 {{ failed }} · 진행 {{ running }} · 대기 {{ waiting }}</div></div>
+  <div class="stat"><div class="label">승인 대기 건수</div><div class="value">{{ pending }}건</div></div>
+</div>
+
+{% if last and last.status == '성공' and last.is_baseline %}
+<div class="alert info">최초 수집본을 비교 기준본으로 등록했습니다. 다음 수집부터 변경을 비교합니다.</div>
+{% elif last and last.status == '성공' and last.change_count == 0 %}
+<div class="alert info">마지막 수집({{ last.base_date }})에서 변경 없음.</div>
+{% endif %}
+
+<form class="search" method="get" action="/">
+  <input type="hidden" name="status" value="{{ status }}">
+  <input type="text" name="q" value="{{ q }}" placeholder="기관명 검색">
+  <button type="submit">검색</button>
+  <a class="btn" href="/export.csv">승인 결과 CSV 다운로드</a>
+</form>
+
+<div class="tabs">
+  {% for f in filters %}
+  <a href="/?status={{ f | urlencode }}{% if q %}&q={{ q | urlencode }}{% endif %}" class="{{ 'on' if f == status }}">{{ f }}</a>
+  {% endfor %}
+</div>
+
+<div class="card table-wrap">
+{% if rows %}
+<table>
+  <thead><tr><th>기관명</th><th>변경 요약</th><th>변경 감지일</th><th>처리 상태</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/cases/{{ r.case.case_id }}">{{ r.case.title }}</a></td>
+    <td>{{ r.case.change_summary }}</td>
+    <td>{{ r.case.detected_at[:10] }}</td>
+    <td>
+      <span class="badge {{ 'ok' if r.state == '승인 완료' }}">{{ r.state }}</span>
+      {% for text, kind in r.badges %}<span class="badge {{ kind }}">{{ text }}</span>{% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif status == '승인 대기' and not q %}
+  <p>새로운 변경사항이 없습니다.</p>
+  {% if total_cases %}<p class="muted">승인 완료·보류·기각 건은 위 필터에서 조회할 수 있습니다.</p>{% endif %}
+{% else %}
+  <p>조건에 맞는 건이 없습니다.</p>
+{% endif %}
+</div>
+{% endblock %}

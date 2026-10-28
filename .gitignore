@@ -1,0 +1,10 @@
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 실제 기관·업무 데이터 원본(내부 자료일 수 있어 저장소에 올리지 않음)
+*.xlsx
+*.xls
+*.xlsm

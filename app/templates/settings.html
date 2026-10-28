@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}설정{% endblock %}
+{% block content %}
+<h1>설정</h1>
+{% if error %}<div class="alert">⚠ {{ error }}</div>{% endif %}
+{% if ok %}<div class="alert ok">{{ ok }}</div>{% endif %}
+
+<form method="post" action="/settings" class="card">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
+  <h2 style="margin-top:0">수집 주기·연결정보</h2>
+  <label for="schedule_time">수집 시각 (매일, HH:MM)</label>
+  <input type="text" id="schedule_time" name="schedule_time" value="{{ s.schedule_time }}">
+  <p class="muted">이 시각에 자동으로 실행되도록 서버의 스케줄러(cron, Windows 작업 스케줄러 등)에서
+    <code>python -m app.daily</code> 를 호출해 등록하세요. 이 값은 등록한 시각을 기록해 두는 용도이며 화면에서 스케줄러를 직접 만들지는 않습니다.</p>
+
+  <div class="alert warn" style="font-weight:400">연결 방식 확정 전 시험용 파일 입력입니다. GCC·법제처·내부 LLM의 실제 연결 방식이 확인되면 이 항목이 교체됩니다.</div>
+  <label for="gcc_dir">GCC 자료 폴더 (날짜.json)</label>
+  <input type="text" id="gcc_dir" name="gcc_dir" value="{{ s.gcc_dir }}">
+  <label for="law_dir">법령 자료 폴더 (기관코드.json)</label>
+  <input type="text" id="law_dir" name="law_dir" value="{{ s.law_dir }}">
+  <label for="llm_dir">AI 분석 예시 응답 폴더 (기관코드.json)</label>
+  <input type="text" id="llm_dir" name="llm_dir" value="{{ s.llm_dir }}">
+  <div class="actions"><button class="primary" type="submit">저장</button></div>
+</form>
+
+<form method="post" action="/settings/upload-gcc" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
+  <h2 style="margin-top:0">수동 파일 입력 (보조 기능)</h2>
+  <p class="muted">연결 장애나 시험 운영 시 GCC 자료 파일을 직접 올립니다. 올린 파일은 GCC 자료 폴더에 <code>날짜.json</code> 으로 저장됩니다.</p>
+  <label for="up_day">기준일 (YYYY-MM-DD)</label>
+  <input type="text" id="up_day" name="day" placeholder="2026-10-02">
+  <label for="up_file">JSON 파일</label>
+  <input type="file" id="up_file" name="file" accept=".json,application/json">
+  <div class="actions"><button type="submit">업로드</button></div>
+</form>
+
+<form method="post" action="/settings/run" class="card">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
+  <h2 style="margin-top:0">지금 실행</h2>
+  <p class="muted">지정한 날짜의 자료로 수집 → 변경 탐지 → 법령 확보·분석을 한 번 실행합니다. 같은 날짜를 다시 실행해도 같은 변경은 중복 등록되지 않습니다.</p>
+  <label for="run_day">기준일 (YYYY-MM-DD)</label>
+  <input type="text" id="run_day" name="day" placeholder="2026-10-02">
+  <div class="actions"><button type="submit">실행</button></div>
+</form>
+{% endblock %}

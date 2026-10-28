@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}기관 연혁 승인 도구{% endblock %}</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#d9dde3; --text:#1d2430; --muted:#5d6675; --accent:#1f5fbf;
+          --warn-bg:#fff4d6; --warn:#8a5a00; --bad-bg:#fde4e4; --bad:#a11d1d; --ok-bg:#e1f4e6; --ok:#17612b;
+          --info-bg:#e6eefb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14181f; --card:#1d232d; --line:#343c49; --text:#e6e9ee; --muted:#a2abb9; --accent:#7ab0ff;
+            --warn-bg:#3b2f10; --warn:#f3cd78; --bad-bg:#431c1c; --bad:#ffaaaa; --ok-bg:#16351f; --ok:#8fe0a6;
+            --info-bg:#1b2a44; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 "Malgun Gothic","Apple SD Gothic Neo",sans-serif; }
+  header.top { background:var(--card); border-bottom:1px solid var(--line); padding:10px 16px;
+               display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header.top a { color:var(--text); text-decoration:none; font-weight:600; }
+  header.top a.active { color:var(--accent); }
+  main { max-width:1100px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 12px; } h2 { font-size:17px; margin:20px 0 8px; } h3 { font-size:15px; margin:0 0 6px; }
+  a { color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; margin:12px 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  .stat .label { color:var(--muted); font-size:13px; } .stat .value { font-size:18px; font-weight:700; }
+  .alert { padding:10px 12px; border-radius:6px; margin:8px 0; background:var(--bad-bg); color:var(--bad); font-weight:600; }
+  .alert.ok { background:var(--ok-bg); color:var(--ok); } .alert.info { background:var(--info-bg); color:var(--text); font-weight:400; }
+  .alert.warn { background:var(--warn-bg); color:var(--warn); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; margin-right:4px;
+           background:var(--info-bg); color:var(--text); }
+  .badge.warn { background:var(--warn-bg); color:var(--warn); } .badge.bad { background:var(--bad-bg); color:var(--bad); }
+  .badge.ok { background:var(--ok-bg); color:var(--ok); }
+  .tabs a { display:inline-block; padding:5px 12px; border:1px solid var(--line); border-radius:16px; margin:0 4px 6px 0;
+            text-decoration:none; color:var(--text); background:var(--card); }
+  .tabs a.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:13px; font-weight:600; }
+  .table-wrap { overflow-x:auto; }
+  input[type=text], select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:5px;
+        background:var(--bg); color:var(--text); font:inherit; }
+  label { display:block; font-size:13px; color:var(--muted); margin:8px 0 2px; }
+  button, .btn { padding:7px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text);
+        font:inherit; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { color:var(--bad); }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:700px){ .cols { grid-template-columns:1fr; } }
+  details { margin:6px 0; } summary { cursor:pointer; color:var(--accent); }
+  blockquote { margin:6px 0; padding:6px 10px; border-left:3px solid var(--line); color:var(--muted); white-space:pre-wrap; }
+  .muted { color:var(--muted); font-size:13px; }
+  .userbar { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .search { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; } .search input { max-width:260px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span>기관 연혁·업무 변동 승인 도구</span>
+  {% if request.state.user %}
+  <a href="/" class="{{ 'active' if request.url.path == '/' or request.url.path.startswith('/cases') }}">변경·승인 목록</a>
+  <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">설정</a>
+  <form method="post" action="/logout" class="userbar">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
+    <span class="muted">로그인: <strong>{{ request.state.user.display_name }}</strong></span>
+    <button type="submit">로그아웃</button>
+  </form>
+  {% endif %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "description": "예시 데이터(가상). 실제 GCC 응답 형식이 아니며 시험용 내부 형식이다.",
+  "complete": true,
+  "records": [
+    {
+      "gcc_code": "G0001",
+      "org_name": "가상정부",
+      "parent_code": null,
+      "prev_org_code": null,
+      "created_date": null,
+      "abolished_date": null
+    },
+    {
+      "gcc_code": "G1000",
+      "org_name": "가상정책부",
+      "parent_code": "G0001",
+      "prev_org_code": null,
+      "created_date": "2000-01-01",
+      "abolished_date": null
+    },
+    {
+      "gcc_code": "G2000",
+      "org_name": "가상정보화국",
+      "parent_code": "G1000",
+      "prev_org_code": null,
+      "created_date": "2005-03-01",
+      "abolished_date": null
+    },
+    {
+      "gcc_code": "G3000",
+      "org_name": "가상통계원",
+      "parent_code": "G0001",
+      "prev_org_code": null,
+      "created_date": "2010-01-01",
+      "abolished_date": null
+    }
+  ]
+}

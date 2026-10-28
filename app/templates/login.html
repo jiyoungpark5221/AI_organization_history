@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}로그인{% endblock %}
+{% block content %}
+<h1>로그인</h1>
+{% if error %}<div class="alert">⚠ {{ error }}</div>{% endif %}
+<form method="post" action="/login" class="card" style="max-width:420px">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <label for="login_id">로그인 ID</label>
+  <input type="text" id="login_id" name="login_id" autocomplete="username" required autofocus>
+  <label for="password">비밀번호</label>
+  <input type="password" id="password" name="password" autocomplete="current-password" required
+         style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text);font:inherit">
+  <div class="actions"><button class="primary" type="submit">로그인</button></div>
+  <p class="muted">계정은 서버 관리자가 <code>python -m app.users create</code> 로 만듭니다.</p>
+</form>
+{% endblock %}

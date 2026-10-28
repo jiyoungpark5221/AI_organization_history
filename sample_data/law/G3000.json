@@ -1,0 +1,25 @@
+{
+  "description": "예시 데이터(가상). 실제 법령·기관과 무관하며 실제 원천 응답 형식이 아니다.",
+  "versions": [
+    {
+      "role": "개편 후",
+      "law_name": "가상통계원 직제",
+      "law_ident": "SAMPLE-LAW-002",
+      "version_ident": "V2",
+      "effective_date": "2026-10-02",
+      "source_url": "https://example.invalid/sample-law-002/v2",
+      "provisions": [
+        {
+          "article_ref": "제1조",
+          "is_addendum": false,
+          "text": "가상통계센터는 통계 생산과 관리에 관한 사무를 맡는다."
+        },
+        {
+          "article_ref": "부칙 제1조",
+          "is_addendum": true,
+          "text": "이 영은 2026년 10월 2일부터 시행한다."
+        }
+      ]
+    }
+  ]
+}

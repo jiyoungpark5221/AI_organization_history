@@ -1,0 +1,40 @@
+{
+  "description": "예시 데이터(가상). 실제 법령·기관과 무관하며 실제 원천 응답 형식이 아니다.",
+  "versions": [
+    {
+      "role": "개편 전",
+      "law_name": "가상정부 직제",
+      "law_ident": "SAMPLE-LAW-001",
+      "version_ident": "V1",
+      "effective_date": "2020-01-01",
+      "source_url": "https://example.invalid/sample-law-001/v1",
+      "provisions": [
+        {
+          "article_ref": "제5조",
+          "is_addendum": false,
+          "text": "정보화국은 다음 사무를 맡는다. 1. 청사 정보시스템 운영 2. 정보화 정책 수립 3. 정보보호 업무 지원"
+        }
+      ]
+    },
+    {
+      "role": "개편 후",
+      "law_name": "가상정부 직제",
+      "law_ident": "SAMPLE-LAW-001",
+      "version_ident": "V2",
+      "effective_date": "2026-10-02",
+      "source_url": "https://example.invalid/sample-law-001/v2",
+      "provisions": [
+        {
+          "article_ref": "제5조",
+          "is_addendum": false,
+          "text": "디지털국은 다음 사무를 맡는다. 1. 청사 정보시스템 운영 2. 디지털 전환 정책 수립"
+        },
+        {
+          "article_ref": "부칙 제1조",
+          "is_addendum": true,
+          "text": "이 영은 2026년 10월 2일부터 시행한다."
+        }
+      ]
+    }
+  ]
+}

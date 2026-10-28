@@ -1,0 +1,68 @@
+{
+  "description": "예시 데이터(가상). 실제 법령·기관과 무관하며 실제 원천 응답 형식이 아니다. LLM 고정 응답.",
+  "summary": "가상정보화국이 폐지되고 가상디지털국이 신설되어 사무가 승계됨",
+  "relations": [
+    {
+      "from_code": "G2000",
+      "to_code": "G2100",
+      "relation_type": "승계",
+      "valid_from": "2026-10-02",
+      "valid_to": null,
+      "date_status": "확인",
+      "evidence": [
+        {
+          "role": "개편 후",
+          "article_ref": "제5조",
+          "excerpt": "디지털국은 다음 사무를 맡는다. 1. 청사 정보시스템 운영",
+          "reason": "정보화국 사무를 디지털국이 맡는 것으로 규정"
+        },
+        {
+          "role": "개편 후",
+          "article_ref": "부칙 제1조",
+          "excerpt": "2026년 10월 2일부터 시행한다.",
+          "reason": "시행일"
+        }
+      ]
+    }
+  ],
+  "task_moves": [
+    {
+      "from_code": "G2000",
+      "to_code": "G2100",
+      "task_description": "청사 정보시스템 운영",
+      "move_scope": "전체",
+      "effective_date": "2026-10-02",
+      "date_status": "확인",
+      "evidence": [
+        {
+          "role": "개편 전",
+          "article_ref": "제5조",
+          "excerpt": "1. 청사 정보시스템 운영",
+          "reason": "개편 전 정보화국 사무"
+        },
+        {
+          "role": "개편 후",
+          "article_ref": "제5조",
+          "excerpt": "1. 청사 정보시스템 운영",
+          "reason": "개편 후 디지털국 사무"
+        }
+      ]
+    },
+    {
+      "from_code": "G2000",
+      "to_code": "G2100",
+      "task_description": "정보보호 업무 지원",
+      "move_scope": "범위 미확인",
+      "effective_date": "2026-10-02",
+      "date_status": "확인",
+      "evidence": [
+        {
+          "role": "개편 후",
+          "article_ref": "제99조",
+          "excerpt": "(존재하지 않는 조항)",
+          "reason": "근거가 확보된 자료에 없음"
+        }
+      ]
+    }
+  ]
+}
