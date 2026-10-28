@@ -8,7 +8,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def db_path() -> str:
-    return os.environ.get("APP_DB", str(ROOT / "data" / "app.db"))
+    if os.environ.get("APP_DB"):
+        return os.environ["APP_DB"]
+    # Vercel 같은 서버리스 환경은 프로젝트 폴더에 쓸 수 없고 /tmp 만 쓸 수 있다(인스턴스마다 임시).
+    if os.environ.get("VERCEL"):
+        return "/tmp/app.db"
+    return str(ROOT / "data" / "app.db")
 
 
 def connect(path: str | None = None) -> sqlite3.Connection:

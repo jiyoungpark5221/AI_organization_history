@@ -1,0 +1,14 @@
+[project]
+name = "ai-organization-history"
+version = "0.1.0"
+description = "AI 기반 기관 연혁·업무 변동 자동분석 및 승인 도구"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "jinja2",
+  "python-multipart",
+  "openpyxl",
+]
+
+[tool.vercel]
+entrypoint = "app.web:app"

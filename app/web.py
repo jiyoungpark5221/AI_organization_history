@@ -46,6 +46,9 @@ def _open():
     path = db_path()
     if path not in _initialized:
         init_db(conn)
+        from . import sample_bootstrap
+
+        sample_bootstrap.bootstrap(conn)  # 샘플 배포 환경에서만 동작한다.
         if path != ":memory:":
             _initialized.add(path)
     return conn
